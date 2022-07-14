@@ -64,6 +64,10 @@ def dynamo_manager():
     )
 
 
+# Not sure the best way use aiobotocore in non context
+# https://github.com/aio-libs/aiobotocore/discussions/955
+
+
 async def enter_dynamo(manager):
     return await manager.__aenter__()
 
