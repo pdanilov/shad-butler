@@ -18,6 +18,7 @@ from aiogram.types import (
     ChatType,
 )
 from aiogram.dispatcher.middlewares import BaseMiddleware
+from aiogram.utils.exceptions import MessageToForwardNotFound
 
 import aiobotocore.session
 
@@ -198,6 +199,18 @@ class DB:
 #####
 
 
+def message_url(chat_id, message_id):
+    # -1001627609834, 21 -> https://t.me/c/1627609834/21
+
+    chat_id = str(chat_id)
+    if chat_id.startswith('-100'):
+        # https://habr.com/ru/post/543676/
+        # "перед id супергрупп и каналов пишется -100"
+        chat_id = chat_id[4:]
+
+    return f'https://t.me/c/{chat_id}/{message_id}'
+
+
 ######
 #  HANDLERS
 ######
@@ -213,12 +226,17 @@ START_MESSAGE_TEXT = (
     'ссылки на локальные чаты, контакты кураторов.'
 )
 
-MISSING_NAV_MESSAGE_TEXT = 'Странно, инфы нет в базе, напиши @alexkuk'
+MISSING_NAV_MESSAGE_TEXT = 'Странно, инфы нет в базе.'
 MISSING_EVENTS_MESSAGE_TEXT = MISSING_NAV_MESSAGE_TEXT
 
 NO_EVENTS_MESSAGE_TEXT = (
     'В ближайшее время нет событий. '
     'Чтобы посмотреть прошедшие, поищи по тегу #event в чате ШАД 15+.'
+)
+
+MISSING_FORWARD_TEXT = (
+    'Хотел переслать сообщение {url}, '
+    'но оно исчезло, странно.'
 )
 
 
@@ -235,6 +253,26 @@ async def handle_start_command(context, message):
         text=START_MESSAGE_TEXT,
         reply_markup=keyboard
     )
+
+
+async def try_forward_message(bot, chat_id, from_chat_id, message_id):
+    # Telegram Bot API missing delete update event
+    # https://github.com/tdlib/telegram-bot-api/issues/286#issuecomment-1154020149
+    # Possible to have in DB message_id that was removed from chat
+
+    try:
+        await bot.forward_message(
+            chat_id=chat_id,
+            from_chat_id=from_chat_id,
+            message_id=message_id
+        )
+    except MessageToForwardNotFound:
+        url = message_url(from_chat_id, message_id)
+        text = MISSING_FORWARD_TEXT.format(url=url)
+        await bot.send_message(
+            chat_id=chat_id,
+            text=text
+        )
 
 
 async def handle_events_button(context, message, cap=3):
@@ -257,7 +295,8 @@ async def handle_events_button(context, message, cap=3):
         await message.answer(text=NO_EVENTS_MESSAGE_TEXT)
 
     for record in records:
-        await context.bot.forward_message(
+        await try_forward_message(
+            context.bot,
             chat_id=message.chat.id,
             from_chat_id=secret.SHAD_CHAT_ID,
             message_id=record.message_id
@@ -266,7 +305,8 @@ async def handle_events_button(context, message, cap=3):
 
 async def handle_nav_button(context, message, record):
     if record:
-        await context.bot.forward_message(
+        await try_forward_message(
+            context.bot,
             chat_id=message.chat.id,
             from_chat_id=secret.SHAD_CHAT_ID,
             message_id=record.message_id
