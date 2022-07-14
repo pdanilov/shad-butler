@@ -1,4 +1,5 @@
 
+import logging
 from os import getenv
 from dataclasses import dataclass
 from datetime import (
@@ -15,11 +16,24 @@ from aiogram.types import (
     ReplyKeyboardMarkup,
     KeyboardButton,
 )
+from aiogram.dispatcher.middlewares import BaseMiddleware
 
 import aiobotocore.session
 
 # Ask @alexkuk for secret.py
 import secret
+
+
+######
+#
+#   LOGGER
+#
+#######
+
+
+log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
+log.addHandler(logging.StreamHandler())
 
 
 ######
@@ -274,6 +288,20 @@ def setup_handlers(context):
     )
 
 
+######
+#   MIDDLEWARE
+#######
+
+
+class LoggingMiddleware(BaseMiddleware):
+    async def on_pre_process_update(self, update, data):
+        log.debug(f'Update: {update}')
+
+
+def setup_middlewares(context):
+    context.dispatcher.middleware.setup(LoggingMiddleware())
+
+
 ########
 #   WEBHOOK
 ######
@@ -329,6 +357,8 @@ BotContext.handle_local_chats_button = handle_local_chats_button
 BotContext.handle_contacts_button = handle_contacts_button
 BotContext.setup_handlers = setup_handlers
 
+BotContext.setup_middlewares = setup_middlewares
+
 BotContext.on_startup = on_startup
 BotContext.on_shutdown = on_shutdown
 BotContext.run = run
@@ -344,4 +374,5 @@ BotContext.run = run
 if __name__ == '__main__':
     context = BotContext()
     context.setup_handlers()
+    context.setup_middlewares()
     context.run()
