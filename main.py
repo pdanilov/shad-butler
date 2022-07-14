@@ -9,8 +9,11 @@ from datetime import (
 from aiogram import (
     Bot,
     Dispatcher,
-    executor,
-    types
+    executor
+)
+from aiogram.types import (
+    ReplyKeyboardMarkup,
+    KeyboardButton,
 )
 
 import aiobotocore.session
@@ -26,29 +29,32 @@ import secret
 ######
 
 
-@dataclass
-class DynamoContext:
-    manager: ...
-    client: ... = None
+######
+#   MANAGER
+######
 
 
 def dynamo_manager():
     session = aiobotocore.session.get_session()
     return session.create_client(
         'dynamodb',
+
+        # Always ru-central1 for YC
+        # https://cloud.yandex.ru/docs/ydb/docapi/tools/aws-setup
         region_name='ru-central1',
+
         endpoint_url=secret.DYNAMO_ENDPOINT,
         aws_access_key_id=secret.AWS_KEY_ID,
         aws_secret_access_key=secret.AWS_KEY,
     )
 
 
-async def enter_dynamo(context):
-    context.client = await context.manager.__aenter__()
+async def enter_dynamo(manager):
+    return await manager.__aenter__()
 
 
-async def exit_dynamo(context):
-    await context.manager.__aexit__(
+async def exit_dynamo(manager):
+    await manager.__aexit__(
         exc_type=None,
         exc_val=None,
         exc_tb=None
@@ -60,14 +66,14 @@ async def exit_dynamo(context):
 #####
 
 
-async def db_scan(client, table):
+async def dynamo_scan(client, table):
     response = await client.scan(
         TableName=table
     )
     return response['Items']
 
 
-async def db_scan_first(client, table):
+async def dynamo_scan_first(client, table):
     response = await client.scan(
         TableName=table,
         Limit=1
@@ -113,7 +119,7 @@ def parse_nav_message(item):
 
 
 ######
-#  CACHE
+#   READ
 ######
 
 
@@ -122,33 +128,46 @@ LOCAL_CHATS_MESSAGE_TABLE = 'local_chats_message'
 CONTACTS_MESSAGE_TABLE = 'contacts_message'
 
 
-@dataclass
-class DBCache:
-    event_messages: [EventMessage] = ()
-    local_chats_message: NavMessage = None
-    contacts_message: NavMessage = None
+async def read_event_messages(client):
+    items = await dynamo_scan(client, EVENT_MESSAGES_TABLE)
+    return [parse_event_message(_) for _ in items]
 
 
-async def fill_db_cache(db, cache):
-    items = await db_scan(db.client, EVENT_MESSAGES_TABLE)
-    cache.event_messages = [parse_event_message(_) for _ in items]
+async def read_local_chats_message(client):
+    item = await dynamo_scan_first(client, LOCAL_CHATS_MESSAGE_TABLE)
+    return parse_nav_message(item)
 
-    item = await db_scan_first(db.client, LOCAL_CHATS_MESSAGE_TABLE)
-    cache.local_chats_message = parse_nav_message(item)
 
-    item = await db_scan_first(db.client, CONTACTS_MESSAGE_TABLE)
-    cache.contacts_message = parse_nav_message(item)
+async def read_contacts_message(client):
+    item = await dynamo_scan_first(client, CONTACTS_MESSAGE_TABLE)
+    return parse_nav_message(item)
 
 
 ######
-#  GLOBAL
+#  DB
 #######
 
 
-manager = dynamo_manager()
-DB = DynamoContext(manager)
+class DB:
+    def __init__(self):
+        self.manager = dynamo_manager()
+        self.client = None
 
-DB_CACHE = DBCache()
+        self.cache = {}
+
+    async def connect(self):
+        self.client = await enter_dynamo(self.manager)
+
+    async def close(self):
+        await exit_dynamo(self.manager)
+
+    async def cached(self, read, *args):
+        key = read, args
+        result = self.cache.get(key)
+        if not result:
+            result = await read(self.client, *args)
+        self.cache[key] = result
+        return result
 
 
 #######
@@ -156,6 +175,11 @@ DB_CACHE = DBCache()
 #   BOT
 #
 #####
+
+
+######
+#  HANDLERS
+######
 
 
 START_COMMAND = 'start'
@@ -172,15 +196,28 @@ MORE_EVENTS_MESSAGE_TEXT = (
     'поищи по тегу #event в чате ШАД 15+'
 )
 
-BOT = Bot(token=secret.BOT_TOKEN)
-DP = Dispatcher(BOT)
+
+async def handle_start_command(context, message):
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[[
+            KeyboardButton(EVENTS_BUTTON_TEXT),
+            KeyboardButton(LOCAL_CHATS_BUTTON_TEXT),
+            KeyboardButton(CONTACTS_BUTTON_TEXT),
+        ]],
+        resize_keyboard=True
+    )
+    await context.bot.send_message(
+        chat_id=message.chat.id,
+        text=START_MESSAGE_TEXT,
+        reply_markup=keyboard
+    )
 
 
-@DP.message_handler(text=EVENTS_BUTTON_TEXT)
-async def handle_events_button(message):
+async def handle_events_button(context, message):
+    records = await context.db.cached(read_event_messages)
     today = Datetime.now().date()
     records = (
-        _ for _ in DB_CACHE.event_messages
+        _ for _ in records
         if _.date >= today
     )
     records = sorted(
@@ -188,62 +225,66 @@ async def handle_events_button(message):
         key=lambda _: _.date
     )
     for record in records:
-        await BOT.forward_message(
+        await context.bot.forward_message(
             chat_id=message.chat.id,
             from_chat_id=secret.SHAD_CHAT_ID,
             message_id=record.message_id
         )
 
-    await BOT.send_message(
+    await context.bot.send_message(
         chat_id=message.chat.id,
         text=MORE_EVENTS_MESSAGE_TEXT
     )
 
 
-async def handle_nav_button(message, record):
-    await BOT.forward_message(
+async def handle_nav_button(context, message, record):
+    await context.bot.forward_message(
         chat_id=message.chat.id,
         from_chat_id=secret.SHAD_CHAT_ID,
         message_id=record.message_id
     )
 
 
-@DP.message_handler(text=LOCAL_CHATS_BUTTON_TEXT)
-async def handle_local_chats_button(message):
-    record = DB_CACHE.local_chats_message
-    await handle_nav_button(message, record)
+async def handle_local_chats_button(context, message):
+    record = await context.db.cached(read_local_chats_message)
+    await handle_nav_button(context, message, record)
 
 
-@DP.message_handler(text=CONTACTS_BUTTON_TEXT)
-async def handle_contacts_button(message):
-    record = DB_CACHE.contacts_message
-    await handle_nav_button(message, record)
+async def handle_contacts_button(context, message):
+    record = await context.db.cached(read_contacts_message)
+    await handle_nav_button(context, message, record)
 
 
-@DP.message_handler(commands=START_COMMAND)
-async def handle_start(message):
-    keyboard = types.ReplyKeyboardMarkup(
-        keyboard=[[
-            types.KeyboardButton(EVENTS_BUTTON_TEXT),
-            types.KeyboardButton(LOCAL_CHATS_BUTTON_TEXT),
-            types.KeyboardButton(CONTACTS_BUTTON_TEXT),
-        ]],
-        resize_keyboard=True
+def setup_handlers(context):
+    context.dispatcher.register_message_handler(
+        context.handle_start_command,
+        commands=START_COMMAND,
     )
-    await BOT.send_message(
-        chat_id=message.chat.id,
-        text=START_MESSAGE_TEXT,
-        reply_markup=keyboard
+    context.dispatcher.register_message_handler(
+        context.handle_events_button,
+        text=EVENTS_BUTTON_TEXT
+    )
+    context.dispatcher.register_message_handler(
+        context.handle_local_chats_button,
+        text=LOCAL_CHATS_BUTTON_TEXT
+    )
+    context.dispatcher.register_message_handler(
+        context.handle_contacts_button,
+        text=CONTACTS_BUTTON_TEXT
     )
 
 
-async def on_startup(_):
-    await enter_dynamo(DB)
-    await fill_db_cache(DB, DB_CACHE)
+########
+#   WEBHOOK
+######
 
 
-async def on_shutdown(_):
-    await exit_dynamo(DB)
+async def on_startup(context, _):
+    await context.db.connect()
+
+
+async def on_shutdown(context, _):
+    await context.db.close()
 
 
 # YC Serverless Containers requires PORT env var
@@ -251,16 +292,56 @@ async def on_shutdown(_):
 PORT = getenv('PORT', 8080)
 
 
-if __name__ == '__main__':
+def run(context):
     executor.start_webhook(
-        dispatcher=DP,
+        dispatcher=context.dispatcher,
+
+        # YC Serverless Container is assigned with endpoint
+        # https://bba......v7v9.containers.yandexcloud.net/
         webhook_path='/',
+
         port=PORT,
 
-        on_startup=on_startup,
-        on_shutdown=on_shutdown,
+        on_startup=context.on_startup,
+        on_shutdown=context.on_shutdown,
 
-        # Disable aiohttp "Running on ... Press CTRL+C". Polutes YC
-        # Logging
+        # Disable aiohttp "Running on ... Press CTRL+C"
+        # Polutes YC Logging
         print=None
     )
+
+
+########
+#   CONTEXT
+######
+
+
+class BotContext:
+    def __init__(self):
+        self.bot = Bot(token=secret.BOT_TOKEN)
+        self.dispatcher = Dispatcher(self.bot)
+        self.db = DB()
+
+
+BotContext.handle_start_command = handle_start_command
+BotContext.handle_events_button = handle_events_button
+BotContext.handle_local_chats_button = handle_local_chats_button
+BotContext.handle_contacts_button = handle_contacts_button
+BotContext.setup_handlers = setup_handlers
+
+BotContext.on_startup = on_startup
+BotContext.on_shutdown = on_shutdown
+BotContext.run = run
+
+
+######
+#
+#   MAIN
+#
+#####
+
+
+if __name__ == '__main__':
+    context = BotContext()
+    context.setup_handlers()
+    context.run()
