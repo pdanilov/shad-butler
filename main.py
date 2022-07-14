@@ -12,7 +12,6 @@ from aiogram import (
     executor,
     types
 )
-from aiogram.contrib.middlewares.logging import LoggingMiddleware
 
 import aiobotocore.session
 
@@ -175,7 +174,6 @@ MORE_EVENTS_MESSAGE_TEXT = (
 
 BOT = Bot(token=secret.BOT_TOKEN)
 DP = Dispatcher(BOT)
-DP.middleware.setup(LoggingMiddleware())
 
 
 @DP.message_handler(text=EVENTS_BUTTON_TEXT)
