@@ -15,6 +15,7 @@ from aiogram import (
 from aiogram.types import (
     ReplyKeyboardMarkup,
     KeyboardButton,
+    ChatType,
 )
 from aiogram.dispatcher.middlewares import BaseMiddleware
 
@@ -272,19 +273,24 @@ async def handle_contacts_button(context, message):
 def setup_handlers(context):
     context.dispatcher.register_message_handler(
         context.handle_start_command,
+        chat_type=ChatType.PRIVATE,
         commands=START_COMMAND,
     )
+
     context.dispatcher.register_message_handler(
         context.handle_events_button,
-        text=EVENTS_BUTTON_TEXT
+        chat_type=ChatType.PRIVATE,
+        text=EVENTS_BUTTON_TEXT,
     )
     context.dispatcher.register_message_handler(
         context.handle_local_chats_button,
-        text=LOCAL_CHATS_BUTTON_TEXT
+        chat_type=ChatType.PRIVATE,
+        text=LOCAL_CHATS_BUTTON_TEXT,
     )
     context.dispatcher.register_message_handler(
         context.handle_contacts_button,
-        text=CONTACTS_BUTTON_TEXT
+        chat_type=ChatType.PRIVATE,
+        text=CONTACTS_BUTTON_TEXT,
     )
 
 
