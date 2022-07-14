@@ -16,22 +16,8 @@ from aiogram.contrib.middlewares.logging import LoggingMiddleware
 
 import aiobotocore.session
 
-
-BOT_TOKEN = ...
-
-WEBHOOK_DOMAIN = ...
-WEBHOOK_PATH = '/'
-
-# Default aiohttp HOST is 0.0.0.0. YC Serverless Containers requires
-# PORT env var
-# https://cloud.yandex.ru/docs/serverless-containers/concepts/runtime#peremennye-okruzheniya
-PORT = getenv('PORT', 8080)
-
-AWS_REGION = 'ru-central1'
-AWS_KEY_ID = ...
-AWS_KEY = ...
-
-DYNAMO_ENDPOINT = ...
+# Ask @alexkuk for secret.py
+import secret
 
 
 ######
@@ -51,10 +37,10 @@ def dynamo_manager():
     session = aiobotocore.session.get_session()
     return session.create_client(
         'dynamodb',
-        region_name=AWS_REGION,
-        endpoint_url=DYNAMO_ENDPOINT,
-        aws_access_key_id=AWS_KEY_ID,
-        aws_secret_access_key=AWS_KEY,
+        region_name='ru-central1',
+        endpoint_url=secret.DYNAMO_ENDPOINT,
+        aws_access_key_id=secret.AWS_KEY_ID,
+        aws_secret_access_key=secret.AWS_KEY,
     )
 
 
@@ -187,9 +173,7 @@ MORE_EVENTS_MESSAGE_TEXT = (
     'поищи по тегу #event в чате ШАД 15+'
 )
 
-SHAD_CHAT_ID = ...
-
-BOT = Bot(token=BOT_TOKEN)
+BOT = Bot(token=secret.BOT_TOKEN)
 DP = Dispatcher(BOT)
 DP.middleware.setup(LoggingMiddleware())
 
@@ -208,7 +192,7 @@ async def handle_events_button(message):
     for record in records:
         await BOT.forward_message(
             chat_id=message.chat.id,
-            from_chat_id=SHAD_CHAT_ID,
+            from_chat_id=secret.SHAD_CHAT_ID,
             message_id=record.message_id
         )
 
@@ -221,7 +205,7 @@ async def handle_events_button(message):
 async def handle_nav_button(message, record):
     await BOT.forward_message(
         chat_id=message.chat.id,
-        from_chat_id=SHAD_CHAT_ID,
+        from_chat_id=secret.SHAD_CHAT_ID,
         message_id=record.message_id
     )
 
@@ -264,10 +248,15 @@ async def on_shutdown(_):
     await exit_dynamo(DB)
 
 
+# YC Serverless Containers requires PORT env var
+# https://cloud.yandex.ru/docs/serverless-containers/concepts/runtime#peremennye-okruzheniya
+PORT = getenv('PORT', 8080)
+
+
 if __name__ == '__main__':
     executor.start_webhook(
         dispatcher=DP,
-        webhook_path=WEBHOOK_PATH,
+        webhook_path='/',
         port=PORT,
 
         on_startup=on_startup,
