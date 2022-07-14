@@ -109,32 +109,32 @@ async def dynamo_scan_first(client, table):
 
 
 @dataclass
-class EventMessage:
-    message_id: int
+class EventPost:
+    post_id: int
     date: Date
 
 
 @dataclass
-class NavMessage:
-    message_id: int
+class NavPost:
+    post_id: int
 
 
-def parse_event_message(item):
-    # [{'date': {'S': '2023-01-01'}, 'message_id': {'N': '7'}},
-    #  {'date': {'S': '2022-08-01'}, 'message_id': {'N': '6'}},
-    #  {'date': {'S': '2022-01-01'}, 'message_id': {'N': '5'}}]
+def parse_event_post(item):
+    # [{'date': {'S': '2023-01-01'}, 'post_id': {'N': '7'}},
+    #  {'date': {'S': '2022-08-01'}, 'post_id': {'N': '6'}},
+    #  {'date': {'S': '2022-01-01'}, 'post_id': {'N': '5'}}]
 
-    return EventMessage(
+    return EventPost(
         date=Date.fromisoformat(item['date']['S']),
-        message_id=int(item['message_id']['N'])
+        post_id=int(item['post_id']['N'])
     )
 
 
-def parse_nav_message(item):
-    # {'message_id': {'N': '4'}}
+def parse_nav_post(item):
+    # {'post_id': {'N': '4'}}
 
-    return NavMessage(
-        message_id=int(item['message_id']['N'])
+    return NavPost(
+        post_id=int(item['post_id']['N'])
     )
 
 
@@ -143,26 +143,26 @@ def parse_nav_message(item):
 ######
 
 
-EVENT_MESSAGES_TABLE = 'event_messages'
-LOCAL_CHATS_MESSAGE_TABLE = 'local_chats_message'
-CONTACTS_MESSAGE_TABLE = 'contacts_message'
+EVENT_POSTS_TABLE = 'event_posts'
+LOCAL_CHATS_POST_TABLE = 'local_chats_post'
+CONTACTS_POST_TABLE = 'contacts_post'
 
 
-async def read_event_messages(client):
-    items = await dynamo_scan(client, EVENT_MESSAGES_TABLE)
-    return [parse_event_message(_) for _ in items]
+async def read_event_posts(client):
+    items = await dynamo_scan(client, EVENT_POSTS_TABLE)
+    return [parse_event_post(_) for _ in items]
 
 
-async def read_local_chats_message(client):
-    item = await dynamo_scan_first(client, LOCAL_CHATS_MESSAGE_TABLE)
+async def read_local_chats_post(client):
+    item = await dynamo_scan_first(client, LOCAL_CHATS_POST_TABLE)
     if item:
-        return parse_nav_message(item)
+        return parse_nav_post(item)
 
 
-async def read_contacts_message(client):
-    item = await dynamo_scan_first(client, CONTACTS_MESSAGE_TABLE)
+async def read_contacts_post(client):
+    item = await dynamo_scan_first(client, CONTACTS_POST_TABLE)
     if item:
-        return parse_nav_message(item)
+        return parse_nav_post(item)
 
 
 ######
@@ -235,8 +235,7 @@ NO_EVENTS_MESSAGE_TEXT = (
 )
 
 MISSING_FORWARD_TEXT = (
-    'Хотел переслать сообщение {url}, '
-    'но оно исчезло, странно.'
+    'Хотел переслать пост {url}, но он исчезло, странно.'
 )
 
 
@@ -276,53 +275,54 @@ async def try_forward_message(bot, chat_id, from_chat_id, message_id):
 
 
 async def handle_events_button(context, message, cap=3):
-    records = await context.db.cached(read_event_messages)
-    if not records:
+    posts = await context.db.cached(read_event_posts)
+    if not posts:
         await message.answer(text=MISSING_EVENTS_MESSAGE_TEXT)
         return
 
     today = Datetime.now().date()
-    records = (
-        _ for _ in records
+    posts = (
+        _ for _ in posts
         if _.date >= today
     )
-    records = sorted(
-        records,
+    posts = sorted(
+        posts,
         key=lambda _: _.date
     )
-    records = records[:cap]
-    if not records:
+    posts = posts[:cap]
+    if not posts:
         await message.answer(text=NO_EVENTS_MESSAGE_TEXT)
 
-    for record in records:
+    for post in posts:
         await try_forward_message(
             context.bot,
             chat_id=message.chat.id,
             from_chat_id=secret.SHAD_CHAT_ID,
-            message_id=record.message_id
+            message_id=post.message_id
         )
 
 
-async def handle_nav_button(context, message, record):
-    if record:
+async def handle_nav_button(context, message, post):
+    if post:
         await try_forward_message(
             context.bot,
             chat_id=message.chat.id,
             from_chat_id=secret.SHAD_CHAT_ID,
-            message_id=record.message_id
+            message_id=post.message_id
         )
     else:
         await message.answer(text=MISSING_NAV_MESSAGE_TEXT)
 
 
 async def handle_local_chats_button(context, message):
-    record = await context.db.cached(read_local_chats_message)
-    await handle_nav_button(context, message, record)
+    post = await context.db.cached(read_local_chats_post)
+    await handle_nav_button(context, message, post)
 
 
 async def handle_contacts_button(context, message):
-    record = await context.db.cached(read_contacts_message)
-    await handle_nav_button(context, message, record)
+    post = await context.db.cached(read_contacts_post)
+    await handle_nav_button(context, message, post)
+
 
 
 def setup_handlers(context):
