@@ -154,12 +154,14 @@ async def read_event_messages(client):
 
 async def read_local_chats_message(client):
     item = await dynamo_scan_first(client, LOCAL_CHATS_MESSAGE_TABLE)
-    return parse_nav_message(item)
+    if item:
+        return parse_nav_message(item)
 
 
 async def read_contacts_message(client):
     item = await dynamo_scan_first(client, CONTACTS_MESSAGE_TABLE)
-    return parse_nav_message(item)
+    if item:
+        return parse_nav_message(item)
 
 
 ######
@@ -210,9 +212,13 @@ START_MESSAGE_TEXT = (
     'Привет, могу показать ближайшие события из чата ШАД 15+, '
     'ссылки на локальные чаты, контакты кураторов.'
 )
-MORE_EVENTS_MESSAGE_TEXT = (
-    'Чтобы посмотреть все события, '
-    'поищи по тегу #event в чате ШАД 15+'
+
+MISSING_NAV_MESSAGE_TEXT = 'Странно, инфы нет в базе, напиши @alexkuk'
+MISSING_EVENTS_MESSAGE_TEXT = MISSING_NAV_MESSAGE_TEXT
+
+NO_EVENTS_MESSAGE_TEXT = (
+    'В ближайшее время нет событий. '
+    'Чтобы посмотреть прошедшие, поищи по тегу #event в чате ШАД 15+.'
 )
 
 
@@ -225,15 +231,18 @@ async def handle_start_command(context, message):
         ]],
         resize_keyboard=True
     )
-    await context.bot.send_message(
-        chat_id=message.chat.id,
+    await message.answer(
         text=START_MESSAGE_TEXT,
         reply_markup=keyboard
     )
 
 
-async def handle_events_button(context, message):
+async def handle_events_button(context, message, cap=3):
     records = await context.db.cached(read_event_messages)
+    if not records:
+        await message.answer(text=MISSING_EVENTS_MESSAGE_TEXT)
+        return
+
     today = Datetime.now().date()
     records = (
         _ for _ in records
@@ -243,6 +252,10 @@ async def handle_events_button(context, message):
         records,
         key=lambda _: _.date
     )
+    records = records[:cap]
+    if not records:
+        await message.answer(text=NO_EVENTS_MESSAGE_TEXT)
+
     for record in records:
         await context.bot.forward_message(
             chat_id=message.chat.id,
@@ -250,18 +263,16 @@ async def handle_events_button(context, message):
             message_id=record.message_id
         )
 
-    await context.bot.send_message(
-        chat_id=message.chat.id,
-        text=MORE_EVENTS_MESSAGE_TEXT
-    )
-
 
 async def handle_nav_button(context, message, record):
-    await context.bot.forward_message(
-        chat_id=message.chat.id,
-        from_chat_id=secret.SHAD_CHAT_ID,
-        message_id=record.message_id
-    )
+    if record:
+        await context.bot.forward_message(
+            chat_id=message.chat.id,
+            from_chat_id=secret.SHAD_CHAT_ID,
+            message_id=record.message_id
+        )
+    else:
+        await message.answer(text=MISSING_NAV_MESSAGE_TEXT)
 
 
 async def handle_local_chats_button(context, message):
