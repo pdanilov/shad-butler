@@ -110,31 +110,31 @@ async def dynamo_scan_first(client, table):
 
 @dataclass
 class EventPost:
-    post_id: int
+    message_id: int
     date: Date
 
 
 @dataclass
 class NavPost:
-    post_id: int
+    message_id: int
 
 
 def parse_event_post(item):
-    # [{'date': {'S': '2023-01-01'}, 'post_id': {'N': '7'}},
-    #  {'date': {'S': '2022-08-01'}, 'post_id': {'N': '6'}},
-    #  {'date': {'S': '2022-01-01'}, 'post_id': {'N': '5'}}]
+    # [{'date': {'S': '2023-01-01'}, 'message_id': {'N': '7'}},
+    #  {'date': {'S': '2022-08-01'}, 'message_id': {'N': '6'}},
+    #  {'date': {'S': '2022-01-01'}, 'message_id': {'N': '5'}}]
 
     return EventPost(
         date=Date.fromisoformat(item['date']['S']),
-        post_id=int(item['post_id']['N'])
+        message_id=int(item['message_id']['N'])
     )
 
 
 def parse_nav_post(item):
-    # {'post_id': {'N': '4'}}
+    # {'message_id': {'N': '4'}}
 
     return NavPost(
-        post_id=int(item['post_id']['N'])
+        message_id=int(item['message_id']['N'])
     )
 
 
