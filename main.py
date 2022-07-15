@@ -1,4 +1,5 @@
 
+import re
 import logging
 from os import getenv
 from dataclasses import dataclass
@@ -18,7 +19,10 @@ from aiogram.types import (
     ChatType,
 )
 from aiogram.dispatcher.middlewares import BaseMiddleware
-from aiogram.utils.exceptions import MessageToForwardNotFound
+from aiogram.utils.exceptions import (
+    MessageToForwardNotFound,
+    MessageIdInvalid
+)
 
 import aiobotocore.session
 
@@ -36,6 +40,91 @@ import secret
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
 log.addHandler(logging.StreamHandler())
+
+
+#######
+#
+#   OBJ
+#
+####
+
+
+######
+#  POST
+######
+
+
+CONTACTS = 'contacts'
+LOCAL_CHATS = 'local_chats'
+EVENT = 'event'
+
+
+@dataclass
+class Post:
+    type: str
+    message_id: int
+    event_tag: str = None
+    event_date: Date = None
+
+
+def find_posts(posts, type=None, message_id=None):
+    for post in posts:
+        if (
+                type and post.type == type
+                or message_id and post.message_id == message_id
+        ):
+            yield post
+
+
+def max_message_id_post(posts):
+    if posts:
+        return max(posts, key=lambda _: _.message_id)
+
+
+def find_post(posts, **kwargs):
+    posts = list(find_posts(posts, **kwargs))
+    return max_message_id_post(posts)
+
+
+######
+#   POST FOOTER
+####
+
+
+@dataclass
+class PostFooter:
+    type: str
+    event_tag: str = None
+    event_date: Date = None
+
+
+EVENT_POST_FOOTER_PATTERN = re.compile(rf'''
+\#{EVENT}
+\s+
+\#([^#\s]+)
+\s+
+(\d\d\d\d-\d\d-\d\d)
+''', re.X)
+
+NAV_POST_FOOTER_PATTERN = re.compile(rf'#({LOCAL_CHATS}|{CONTACTS})')
+
+
+def parse_post_footer(text):
+    # #contacts
+    # #local_chats
+    # #event #sf_picnic 2022-07-09
+    # #event #zoom_alice 2022-07-13
+
+    match = EVENT_POST_FOOTER_PATTERN.search(text)
+    if match:
+        event_tag, event_date = match.groups()
+        event_date = Date.fromisoformat(event_date)
+        return PostFooter(EVENT, event_tag, event_date)
+
+    match = NAV_POST_FOOTER_PATTERN.search(text)
+    if match:
+        type, = match.groups()
+        return PostFooter(type)
 
 
 ######
@@ -86,6 +175,10 @@ async def exit_dynamo(manager):
 #####
 
 
+S = 'S'
+N = 'N'
+
+
 async def dynamo_scan(client, table):
     response = await client.scan(
         TableName=table
@@ -93,76 +186,87 @@ async def dynamo_scan(client, table):
     return response['Items']
 
 
-async def dynamo_scan_first(client, table):
-    response = await client.scan(
+async def dynamo_put(client, table, item):
+    await client.put_item(
         TableName=table,
-        Limit=1
+        Item=item
     )
-    items = response['Items']
-    if items:
-        return items[0]
+
+
+async def dynamo_delete(client, table, key_name, key_value, key_type=N):
+    await client.delete_item(
+        TableName=table,
+        Key={
+            key_name: {
+                key_type: str(key_value)
+            }
+        }
+    )
 
 
 ######
-#   PARSE
+#   DE/SERIALIZE
 ####
 
 
-@dataclass
-class EventPost:
-    message_id: int
-    date: Date
+def dynamo_parse_post(item):
+    type = item['type']['S']
+    message_id = int(item['message_id']['N'])
+
+    event_tag, event_date = None, None
+    if 'event_tag' in item:
+        event_tag = item['event_tag']['S']
+
+    if 'event_date' in item:
+        event_date = Date.fromisoformat(item['event_date']['S'])
+
+    return Post(type, message_id, event_tag, event_date)
 
 
-@dataclass
-class NavPost:
-    message_id: int
-
-
-def parse_event_post(item):
-    # [{'date': {'S': '2023-01-01'}, 'message_id': {'N': '7'}},
-    #  {'date': {'S': '2022-08-01'}, 'message_id': {'N': '6'}},
-    #  {'date': {'S': '2022-01-01'}, 'message_id': {'N': '5'}}]
-
-    return EventPost(
-        date=Date.fromisoformat(item['date']['S']),
-        message_id=int(item['message_id']['N'])
-    )
-
-
-def parse_nav_post(item):
-    # {'message_id': {'N': '4'}}
-
-    return NavPost(
-        message_id=int(item['message_id']['N'])
-    )
+def dynamo_format_post(post):
+    item = {
+        'type': {
+            'S': post.type
+        },
+        'message_id': {
+            'N': str(post.message_id)
+        },
+    }
+    if post.event_tag:
+        item['event_tag'] = {
+            'S': post.event_tag
+        }
+    if post.event_date:
+        item['event_date'] = {
+            'S': post.event_date.isoformat()
+        }
+    return item
 
 
 ######
-#   READ
+#   READ/WRITE
 ######
 
 
-EVENT_POSTS_TABLE = 'event_posts'
-LOCAL_CHATS_POST_TABLE = 'local_chats_post'
-CONTACTS_POST_TABLE = 'contacts_post'
+POSTS_TABLE = 'posts'
+MESSAGE_ID_KEY = 'message_id'
 
 
-async def read_event_posts(client):
-    items = await dynamo_scan(client, EVENT_POSTS_TABLE)
-    return [parse_event_post(_) for _ in items]
+async def read_posts(db):
+    items = await dynamo_scan(db.client, POSTS_TABLE)
+    return [dynamo_parse_post(_) for _ in items]
 
 
-async def read_local_chats_post(client):
-    item = await dynamo_scan_first(client, LOCAL_CHATS_POST_TABLE)
-    if item:
-        return parse_nav_post(item)
+async def put_post(db, post):
+    item = dynamo_format_post(post)
+    await dynamo_put(db.client, POSTS_TABLE, item)
 
 
-async def read_contacts_post(client):
-    item = await dynamo_scan_first(client, CONTACTS_POST_TABLE)
-    if item:
-        return parse_nav_post(item)
+async def delete_post(db, message_id):
+    await dynamo_delete(
+        db.client, POSTS_TABLE,
+        MESSAGE_ID_KEY, message_id
+    )
 
 
 ######
@@ -172,24 +276,34 @@ async def read_contacts_post(client):
 
 class DB:
     def __init__(self):
-        self.manager = dynamo_manager()
+        self.manager = None
         self.client = None
 
         self.cache = {}
 
     async def connect(self):
+        self.manager = dynamo_manager()
         self.client = await enter_dynamo(self.manager)
 
     async def close(self):
         await exit_dynamo(self.manager)
 
-    async def cached(self, read, *args):
-        key = read, args
+    async def cached(self, op, *args):
+        key = op, args
         result = self.cache.get(key)
         if not result:
-            result = await read(self.client, *args)
+            result = await op(*args)
         self.cache[key] = result
         return result
+
+    def pop_cache(self, op, *args):
+        key = op, args
+        self.cache.pop(key, None)
+
+
+DB.read_posts = read_posts
+DB.put_post = put_post
+DB.delete_post = delete_post
 
 
 #######
@@ -235,7 +349,7 @@ NO_EVENTS_MESSAGE_TEXT = (
 )
 
 MISSING_FORWARD_TEXT = (
-    'Хотел переслать пост {url}, но он исчезло, странно.'
+    'Хотел переслать пост {url}, но он исчез, странно, удалю и у себя.'
 )
 
 
@@ -254,75 +368,102 @@ async def handle_start_command(context, message):
     )
 
 
-async def try_forward_message(bot, chat_id, from_chat_id, message_id):
+async def forward_post(context, message, post):
     # Telegram Bot API missing delete update event
     # https://github.com/tdlib/telegram-bot-api/issues/286#issuecomment-1154020149
-    # Possible to have in DB message_id that was removed from chat
+    # Remove after forward fails
 
     try:
-        await bot.forward_message(
-            chat_id=chat_id,
-            from_chat_id=from_chat_id,
-            message_id=message_id
+        await context.bot.forward_message(
+            chat_id=message.chat.id,
+            from_chat_id=secret.SHAD_CHAT_ID,
+            message_id=post.message_id
         )
-    except MessageToForwardNotFound:
-        url = message_url(from_chat_id, message_id)
+
+    # No sure why 2 types of exceptions
+    # Clear history, empty chat -> MessageIdInvalid
+    # Remove single message -> MessageToForwardNotFound
+    except (MessageToForwardNotFound, MessageIdInvalid):
+
+        url = message_url(
+            chat_id=secret.SHAD_CHAT_ID,
+            message_id=post.message_id
+        )
         text = MISSING_FORWARD_TEXT.format(url=url)
-        await bot.send_message(
-            chat_id=chat_id,
-            text=text
-        )
+        await message.answer(text=text)
+        await context.db.delete_post(post.message_id)
+        context.db.pop_cache(context.db.read_posts)
 
 
 async def handle_events_button(context, message, cap=3):
-    posts = await context.db.cached(read_event_posts)
+    posts = await context.db.cached(context.db.read_posts)
     if not posts:
         await message.answer(text=MISSING_EVENTS_MESSAGE_TEXT)
         return
 
     today = Datetime.now().date()
-    posts = (
+    posts = [
         _ for _ in posts
-        if _.date >= today
-    )
+        if _.type == EVENT
+        if _.event_date >= today
+    ]
     posts = sorted(
         posts,
-        key=lambda _: _.date
+        key=lambda _: _.event_date
     )
     posts = posts[:cap]
     if not posts:
         await message.answer(text=NO_EVENTS_MESSAGE_TEXT)
 
     for post in posts:
-        await try_forward_message(
-            context.bot,
-            chat_id=message.chat.id,
-            from_chat_id=secret.SHAD_CHAT_ID,
-            message_id=post.message_id
-        )
+        await forward_post(context, message, post)
 
 
-async def handle_nav_button(context, message, post):
+async def handle_nav_button(context, message, type):
+    posts = await context.db.cached(context.db.read_posts)
+    post = find_post(posts, type=type)
     if post:
-        await try_forward_message(
-            context.bot,
-            chat_id=message.chat.id,
-            from_chat_id=secret.SHAD_CHAT_ID,
-            message_id=post.message_id
-        )
+        await forward_post(context, message, post)
     else:
         await message.answer(text=MISSING_NAV_MESSAGE_TEXT)
 
 
 async def handle_local_chats_button(context, message):
-    post = await context.db.cached(read_local_chats_post)
-    await handle_nav_button(context, message, post)
+    await handle_nav_button(context, message, LOCAL_CHATS)
 
 
 async def handle_contacts_button(context, message):
-    post = await context.db.cached(read_contacts_post)
-    await handle_nav_button(context, message, post)
+    await handle_nav_button(context, message, CONTACTS)
 
+
+async def new_post(context, message, footer):
+    post = Post(
+        footer.type, message.message_id,
+        footer.event_tag, footer.event_date
+    )
+    await context.db.put_post(post)
+    context.db.pop_cache(context.db.read_posts)
+
+
+async def handle_chat_new_message(context, message):
+    footer = parse_post_footer(message.text)
+    if footer:
+        await new_post(context, message, footer)
+
+
+async def handle_chat_edited_message(context, message):
+    footer = parse_post_footer(message.text)
+    if footer:
+        # Added footer to existing message
+        await new_post(context, message, footer)
+        return
+
+    posts = await context.db.cached(context.db.read_posts)
+    post = find_post(posts, message_id=message.message_id)
+    if post:
+        # Removed footer from post
+        await context.db.delete_post(post.message_id)
+        context.db.pop_cache(context.db.read_posts)
 
 
 def setup_handlers(context):
@@ -346,6 +487,15 @@ def setup_handlers(context):
         context.handle_contacts_button,
         chat_type=ChatType.PRIVATE,
         text=CONTACTS_BUTTON_TEXT,
+    )
+
+    context.dispatcher.register_message_handler(
+        context.handle_chat_new_message,
+        chat_id=secret.SHAD_CHAT_ID,
+    )
+    context.dispatcher.register_edited_message_handler(
+        context.handle_chat_edited_message,
+        chat_id=secret.SHAD_CHAT_ID,
     )
 
 
@@ -416,6 +566,8 @@ BotContext.handle_start_command = handle_start_command
 BotContext.handle_events_button = handle_events_button
 BotContext.handle_local_chats_button = handle_local_chats_button
 BotContext.handle_contacts_button = handle_contacts_button
+BotContext.handle_chat_new_message = handle_chat_new_message
+BotContext.handle_chat_edited_message = handle_chat_edited_message
 BotContext.setup_handlers = setup_handlers
 
 BotContext.setup_middlewares = setup_middlewares
