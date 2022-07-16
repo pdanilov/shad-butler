@@ -4,7 +4,13 @@ REGISTRY = cr.yandex/crps5tmfd0qqeb1jvvqh
 REMOTE = $(REGISTRY)/$(IMAGE)
 
 test-lint:
-	pytest -vv --pycodestyle --flakes *.py
+	pytest -vv --pycodestyle --flakes main.py
+
+test-key:
+	pytest -vv --asyncio-mode=auto -s -k $(KEY) test.py
+
+test-cov:
+	pytest -vv --asyncio-mode=auto --cov-report html --cov main test.py
 
 image:
 	docker build -t $(IMAGE) .
