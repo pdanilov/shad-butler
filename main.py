@@ -279,26 +279,12 @@ class DB:
         self.manager = None
         self.client = None
 
-        self.cache = {}
-
     async def connect(self):
         self.manager = dynamo_manager()
         self.client = await enter_dynamo(self.manager)
 
     async def close(self):
         await exit_dynamo(self.manager)
-
-    async def cached(self, op, *args):
-        key = op, args
-        result = self.cache.get(key)
-        if not result:
-            result = await op(*args)
-        self.cache[key] = result
-        return result
-
-    def pop_cache(self, op, *args):
-        key = op, args
-        self.cache.pop(key, None)
 
 
 DB.read_posts = read_posts
@@ -392,11 +378,10 @@ async def forward_post(context, message, post):
         text = MISSING_FORWARD_TEXT.format(url=url)
         await message.answer(text=text)
         await context.db.delete_post(post.message_id)
-        context.db.pop_cache(context.db.read_posts)
 
 
 async def handle_events_button(context, message, cap=3):
-    posts = await context.db.cached(context.db.read_posts)
+    posts = await context.db.read_posts()
     if not posts:
         await message.answer(text=MISSING_EVENTS_MESSAGE_TEXT)
         return
@@ -420,7 +405,7 @@ async def handle_events_button(context, message, cap=3):
 
 
 async def handle_nav_button(context, message, type):
-    posts = await context.db.cached(context.db.read_posts)
+    posts = await context.db.read_posts()
     post = find_post(posts, type=type)
     if post:
         await forward_post(context, message, post)
@@ -442,7 +427,6 @@ async def new_post(context, message, footer):
         footer.event_tag, footer.event_date
     )
     await context.db.put_post(post)
-    context.db.pop_cache(context.db.read_posts)
 
 
 async def handle_chat_new_message(context, message):
@@ -458,12 +442,11 @@ async def handle_chat_edited_message(context, message):
         await new_post(context, message, footer)
         return
 
-    posts = await context.db.cached(context.db.read_posts)
+    posts = await context.db.read_posts()
     post = find_post(posts, message_id=message.message_id)
     if post:
         # Removed footer from post
         await context.db.delete_post(post.message_id)
-        context.db.pop_cache(context.db.read_posts)
 
 
 def setup_handlers(context):

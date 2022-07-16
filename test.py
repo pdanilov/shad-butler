@@ -50,11 +50,8 @@ async def test_db_posts(db):
     # working bot
     await db.put_post(post)
 
-    posts = await db.cached(db.read_posts)
-    assert find_post(posts, message_id=post.message_id)
-
-    db.pop_cache(db.read_posts)
-    assert not db.cache
+    posts = await db.read_posts()
+    assert find_post(posts, message_id=post.message_id) == post
 
     await db.delete_post(post.message_id)
     posts = await db.read_posts()
