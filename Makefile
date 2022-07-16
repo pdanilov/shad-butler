@@ -4,7 +4,7 @@ REGISTRY = cr.yandex/crps5tmfd0qqeb1jvvqh
 REMOTE = $(REGISTRY)/$(IMAGE)
 
 test-lint:
-	pytest -vv --pycodestyle --flakes main.py
+	pytest -vv --asyncio-mode=auto --pycodestyle --flakes main.py
 
 test-key:
 	pytest -vv --asyncio-mode=auto -s -k $(KEY) test.py
