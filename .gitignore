@@ -2,4 +2,4 @@ notes/
 __pycache__/
 .coverage
 
-secret.py
+.env

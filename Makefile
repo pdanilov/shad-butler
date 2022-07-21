@@ -1,6 +1,6 @@
 
 IMAGE = shad-botik
-REGISTRY = cr.yandex/crps5tmfd0qqeb1jvvqh
+REGISTRY = cr.yandex/$(REGISTRY_ID)
 REMOTE = $(REGISTRY)/$(IMAGE)
 
 test-lint:
@@ -22,10 +22,15 @@ push:
 deploy:
 	yc serverless container revision deploy \
 		--container-name shad-botik \
-		--image cr.yandex/crps5tmfd0qqeb1jvvqh/shad-botik:latest \
+		--image $(REGISTRY)/shad-botik:latest \
 		--cores 1 \
 		--memory 256MB \
-		--concurrency 10 \
+		--concurrency 16 \
 		--execution-timeout 30s \
-		--service-account-id ajedo3dbrjria8hidtsl \
+		--environment BOT_TOKEN=$(BOT_TOKEN) \
+		--environment AWS_KEY_ID=$(AWS_KEY_ID) \
+		--environment AWS_KEY=$(AWS_KEY) \
+		--environment DYNAMO_ENDPOINT=$(DYNAMO_ENDPOINT) \
+	        --environment CHAT_ID=$(CHAT_ID) \
+		--service-account-id $(SERVICE_ACCOUNT_ID) \
 		--folder-name shad-botik

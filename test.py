@@ -8,12 +8,16 @@ from json import (
 
 import pytest
 
-from aiogram.types import Update
+from aiogram.types import (
+    Update,
+    ChatMember
+)
 
 from main import (
     Bot,
     Dispatcher,
     BadRequest,
+    ChatMemberStatus,
 
     DB,
     CachedDB,
@@ -24,10 +28,6 @@ from main import (
     Post,
     find_post,
 
-    START_STATE,
-    GRAD_STATE,
-    NO_GRAD_STATE,
-    NAV_STATE,
     User,
 )
 
@@ -39,8 +39,8 @@ from main import (
 ######
 
 
-# To use db fixture with scope=session, has to define event_loop
-# fixture, no idea why
+# have to define event_loop fixture, to use db fixture with
+# scope=session. No idea why
 # https://github.com/tortoise/tortoise-orm/issues/638
 
 
@@ -61,7 +61,6 @@ async def test_db_posts(db):
     post = Post(
         type='test',
         message_id=-1,
-        event_tag='zoom_vasya',
         event_date=Date.fromisoformat('2020-01-01')
     )
 
@@ -77,15 +76,10 @@ async def test_db_posts(db):
     assert not find_post(posts, message_id=post.message_id)
 
 
-async def test_db_grads(db):
-    assert await db.grad_exists('alexkuk')
-    assert not await db.grad_exists('ne_grad')
-
-
 async def test_db_users(db):
     user = User(
         id=1,
-        state=START_STATE
+        is_chat_member=False
     )
     await db.put_user(user)
     assert user == await db.get_user(user.id)
@@ -100,12 +94,8 @@ async def test_db_users(db):
 
 
 # Mock bot, do not send requests to Telegram server, just store in
-# trace array. Okey to do so, almost never use Telegram response
-# anyway. Exception is error in forwardMessage, that we use to delete
-# post.
-
-# Mock db, just put/delete items in array. Test actual Dynamo in
-# separate db tests.
+# trace array. Almost never use Telegram response anyway. Except for
+# forwardMessage, getChatMember
 
 
 class FakeBot(Bot):
@@ -113,25 +103,40 @@ class FakeBot(Bot):
         Bot.__init__(self, token)
         self.trace = []
         self.chat_members = []
-
+        self.chat_messages = []
+        
     async def request(self, method, data):
         json = format_json(data, ensure_ascii=False)
         self.trace.append([method, json])
         return {}
 
-    def trace_methods(self):
-        return [method for method, _ in self.trace]
+    async def forward_message(self, chat_id, from_chat_id, message_id):
+        data = dict(chat_id=chat_id, from_chat_id=from_chat_id, message_id=message_id)
+        await self.request('forwardMessage', data)
+
+        if message_id not in self.chat_messages:
+            raise BadRequest.detect('Message to forward not found')
 
     async def get_chat_member(self, chat_id, user_id):
+        data = dict(chat_id=chat_id, user_id=user_id)
+        await self.request('getChatMember', data)
+
         if user_id not in self.chat_members:
-            raise BadRequest('user not found')
+            raise BadRequest.detect('User not found')
+        
+        return ChatMember(
+            status=ChatMemberStatus.MEMBER
+        )
+
+
+# Mock db, just put/delete items in array. Test actual Dynamo in
+# separate db tests.
 
 
 class FakeDB(DB):
     def __init__(self):
         DB.__init__(self)
         self.posts = []
-        self.grads = []
         self.users = []
 
     async def read_posts(self):
@@ -146,9 +151,6 @@ class FakeDB(DB):
             if _.message_id != message_id
         ]
 
-    async def grad_exists(self, username):
-        return username in self.grads
-
     async def get_user(self, id):
         for user in self.users:
             if user.id == id:
@@ -156,6 +158,12 @@ class FakeDB(DB):
 
     async def put_user(self, user):
         self.users.append(user)
+
+    async def delete_user(self, id):
+        self.users = [
+            _ for _ in self.users
+            if _.id != id
+        ]
 
 
 class FakeBotContext(BotContext):
@@ -168,8 +176,8 @@ class FakeBotContext(BotContext):
 @pytest.fixture(scope='function')
 def context():
     context = FakeBotContext()
-    context.setup_filters()
     context.setup_handlers()
+    context.setup_middlewares()
 
     Bot.set_current(context.bot)
     Dispatcher.set_current(context.dispatcher)
@@ -183,140 +191,165 @@ async def process_update(context, json):
     await context.dispatcher.process_update(update)
 
 
+def match_trace(trace, etalon):
+    if len(trace) != len(etalon):
+        return False
+
+    for (method, json), (etalon_method, etalon_match) in zip(trace, etalon):
+        if method != etalon_method:
+            return False
+
+        if etalon_match not in json:
+            return False
+
+    return True
+
+
 #######
 #   START
 ######
 
 
-async def test_bot_start_chat_member(context):
+START_JSON = '{"update_id": 767558049, "message": {"message_id": 303, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "chat": {"id": 113947584, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "type": "private"}, "date": 1657879247, "text": "/start", "entities": [{"type": "bot_command", "offset": 0, "length": 6}]}}'
+
+
+async def test_bot_start_wip(context):
+    await process_update(context, START_JSON.replace('alexkuk', 'abc'))
+    assert match_trace(context.bot.trace, [
+        ['sendMessage', '{"chat_id": 113947584, "text": "Бот пока отвечает только разработ']
+    ])
+
+
+async def test_bot_start_not_chat_member(context):
+    await process_update(context, START_JSON)
+    assert match_trace(context.bot.trace, [
+        ['getChatMember', '{"chat_id": -1001627609834, "user_id": 113947584}'],
+        ['sendMessage', '{"chat_id": 113947584, "text": "Не нашел тебя в чате выпускников']
+    ])
+
+
+async def test_bot_start_check_chat_member(context):
     context.bot.chat_members = [113947584]
-    json = '{"update_id": 767558049, "message": {"message_id": 303, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "chat": {"id": 113947584, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "type": "private"}, "date": 1657879247, "text": "/start", "entities": [{"type": "bot_command", "offset": 0, "length": 6}]}}'
-    await process_update(context, json)
-    assert context.db.users == [User(id=113947584, state='nav')]
+    await process_update(context, START_JSON)
+    assert match_trace(context.bot.trace, [
+        ['getChatMember', '{"chat_id": -1001627609834, "user_id": 113947584}'],
+        ['sendMessage', '{"chat_id": 113947584, "text": "Что может делать этот бот'],
+        ['setMyCommands', '{"commands": "[{\\"command\\": \\"future']
+    ])
+    assert context.db.users == [User(id=113947584, is_chat_member=True)]
 
 
-async def test_bot_start_grad(context):
-    context.db.users = [
-        User(113947584, START_STATE)
-    ]
-    context.db.grads = ['alexkuk']
-    json = '{"update_id": 767558049, "message": {"message_id": 303, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "chat": {"id": 113947584, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "type": "private"}, "date": 1657879247, "text": "/start", "entities": [{"type": "bot_command", "offset": 0, "length": 6}]}}'
-    await process_update(context, json)
-    assert context.db.users == [User(id=113947584, state='start'), User(id=113947584, state='grad')]
+async def test_bot_start_is_chat_member(context):
+    context.db.users = [User(id=113947584, is_chat_member=True)]
+    await process_update(context, START_JSON)
+    assert match_trace(context.bot.trace, [
+        ['sendMessage', '{"chat_id": 113947584, "text": "Что может делать этот бот'],
+        ['setMyCommands', '{"commands": ']
+    ])
 
 
-async def test_bot_start_no_grad(context):
-    json = '{"update_id": 767558049, "message": {"message_id": 303, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "chat": {"id": 113947584, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "type": "private"}, "date": 1657879247, "text": "/start", "entities": [{"type": "bot_command", "offset": 0, "length": 6}]}}'
-    await process_update(context, json)
-    assert context.db.users == [User(id=113947584, state='no_grad')]
-
-
-#####
-#   GRAD
 ######
+#  OTHER
+#######
 
 
-async def test_bot_grad_success(context):
-    context.db.users = [
-        User(113947584, GRAD_STATE)
+async def test_bot_other(context):
+    context.db.users = [User(id=113947584, is_chat_member=True)]
+    await process_update(context, START_JSON.replace('/start', 'hiii'))
+    assert match_trace(context.bot.trace, [
+        ['sendMessage', '{"chat_id": 113947584, "text": "Что может делать этот бот'],
+    ])
+
+
+#######
+#   EVENTS
+####
+
+
+EVENTS_JSON = START_JSON.replace('/start', '/future_events')
+
+
+async def test_bot_events_missing(context):
+    context.db.users = [User(id=113947584, is_chat_member=True)]
+    await process_update(context, EVENTS_JSON)
+    assert context.bot.trace == [
+        ['sendMessage', '{"chat_id": 113947584, "text": "Не нашел постов с тегом #event."}']
     ]
-    context.bot.chat_members = [113947584]
-    json = '{"update_id": 767558049, "message": {"message_id": 303, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "chat": {"id": 113947584, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "type": "private"}, "date": 1657879247, "text": "Что дальше"}}'
-    await process_update(context, json)
-    assert context.db.users == [User(id=113947584, state='grad'), User(id=113947584, state='nav')]
 
 
-async def test_bot_grad_fail(context):
-    context.db.users = [
-        User(113947584, GRAD_STATE)
+async def test_bot_events_no(context):
+    context.db.users = [User(id=113947584, is_chat_member=True)]
+    context.db.posts = [
+        Post(type='event', message_id=22, event_date=datetime.date(2020, 8, 1))
     ]
-    context.bot.chat_members = []
-    json = '{"update_id": 767558049, "message": {"message_id": 303, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "chat": {"id": 113947584, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "type": "private"}, "date": 1657879247, "text": "Что дальше"}}'
-    await process_update(context, json)
+    context.bot.chat_messages = [22]
+    await process_update(context, EVENTS_JSON)
+    assert match_trace(context.bot.trace,[
+        ['sendMessage', '{"chat_id": 113947584, "text": "В ближайшее время нет эвентов']
+    ])
 
 
-#####
-#   NO GRAD
-######
-
-
-async def test_bot_no_grad(context):
-    context.db.users = [
-        User(113947584, NO_GRAD_STATE)
+async def test_bot_events_select(context):
+    context.db.users = [User(id=113947584, is_chat_member=True)]
+    context.bot.chat_messages = [22, 23, 24]
+    context.db.posts = [
+        Post(type='event', message_id=22, event_date=datetime.date(2020, 8, 1)),
+        Post(type='event', message_id=23, event_date=datetime.date(2030, 8, 1)),
+        Post(type='event', message_id=24, event_date=datetime.date(2030, 8, 1)),
     ]
-    context.db.grads = ['alexkuk']
-    json = '{"update_id": 767558049, "message": {"message_id": 303, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "chat": {"id": 113947584, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "type": "private"}, "date": 1657879247, "text": "Попробовать еще раз"}}'
-    await process_update(context, json)
-    assert context.db.users == [User(id=113947584, state='no_grad'), User(id=113947584, state='grad')]
+    await process_update(context, EVENTS_JSON)
+    assert match_trace(context.bot.trace, [
+        ['forwardMessage', '"message_id": 23}'],
+        ['forwardMessage', '"message_id": 24}'],
+    ])
 
 
 #######
 #   NAV
-####
+#####
 
 
-async def test_bot_nav_empty_events(context):
-    context.db.users = [
-        User(113947584, NAV_STATE)
+NAV_JSON = START_JSON.replace('/start', '/chats')
+
+
+async def test_bot_nav_missing(context):
+    context.db.users = [User(id=113947584, is_chat_member=True)]
+    await process_update(context, NAV_JSON)
+    assert context.bot.trace == [
+        ['sendMessage', '{"chat_id": 113947584, "text": "Не нашел постов с тегом #chats."}']
     ]
-    json = '{"update_id": 767558049, "message": {"message_id": 303, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "chat": {"id": 113947584, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "type": "private"}, "date": 1657879247, "text": "🎉 События"}}'
-    await process_update(context, json)
-    assert context.bot.trace == [['sendMessage', '{"chat_id": 113947584, "text": "Странно, инфы нет в базе."}']]
 
 
-async def test_bot_nav_empty_contacts(context):
-    context.db.users = [
-        User(113947584, NAV_STATE)
+async def test_bot_nav_ok(context):
+    context.db.users = [User(id=113947584, is_chat_member=True)]
+    context.bot.chat_messages = [22]
+    context.db.posts = [
+        Post(type='chats', message_id=22),
     ]
-    json = '{"update_id": 767558049, "message": {"message_id": 303, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "chat": {"id": 113947584, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "type": "private"}, "date": 1657879247, "text": "Контакты кураторов"}}'
-    await process_update(context, json)
-    assert context.bot.trace == [['sendMessage', '{"chat_id": 113947584, "text": "Странно, инфы нет в базе."}']]
+    await process_update(context, NAV_JSON)
+    assert match_trace(context.bot.trace, [
+        ['forwardMessage', '"message_id": 22}'],
+    ])
 
 
-async def test_bot_nav_add_edit_event(context):
-    context.db.users = [
-        User(113947584, NAV_STATE)
-    ]
-    json = '{"update_id": 767558050, "message": {"message_id": 22, "from": {"id": 1087968824, "is_bot": true, "first_name": "Group", "username": "GroupAnonymousBot"}, "sender_chat": {"id": -1001627609834, "title": "shad15_bot_test_chat", "type": "supergroup"}, "chat": {"id": -1001627609834, "title": "shad15_bot_test_chat", "type": "supergroup"}, "date": 1657879275, "text": "Событие #event #zoom 2030-08-01"}}'
+
+########
+#   CHAT
+#####
+
+
+async def test_bot_chat_add_remove_footer(context):
+    context.db.users = [User(id=113947584, is_chat_member=True)]
+    json = '{"update_id": 767558050, "message": {"message_id": 22, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "sender_chat": {"id": -1001627609834, "title": "shad15_bot_test_chat", "type": "supergroup"}, "chat": {"id": -1001627609834, "title": "shad15_bot_test_chat", "type": "supergroup"}, "date": 1657879275, "text": "Событие #event 2030-08-01"}}'
     await process_update(context, json)
     assert context.db.posts == [
-        Post(type='event', message_id=22, event_tag='zoom', event_date=datetime.date(2030, 8, 1)),
+        Post(message_id=22, type='event', event_date=datetime.date(2030, 8, 1))
     ]
 
-    json = '{"update_id": 767558051, "edited_message": {"message_id": 22, "from": {"id": 1087968824, "is_bot": true, "first_name": "Group", "username": "GroupAnonymousBot"}, "sender_chat": {"id": -1001627609834, "title": "shad15_bot_test_chat", "type": "supergroup"}, "chat": {"id": -1001627609834, "title": "shad15_bot_test_chat", "type": "supergroup"}, "date": 1657879275, "edit_date": 1657879298, "text": "Событие #event #zoom 2030-09-01"}}'
-    await process_update(context, json)
-    assert context.db.posts == [
-        Post(type='event', message_id=22, event_tag='zoom', event_date=datetime.date(2030, 8, 1)),
-        Post(type='event', message_id=22, event_tag='zoom', event_date=datetime.date(2030, 9, 1))
-    ]
-
-    json = '{"update_id": 767558049, "message": {"message_id": 303, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "chat": {"id": 113947584, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "type": "private"}, "date": 1657879247, "text": "🎉 События"}}'
-    await process_update(context, json)
-    assert context.bot.trace == [['forwardMessage', '{"chat_id": 113947584, "from_chat_id": -1001627609834, "message_id": 22}']]
-
-
-async def test_bot_nav_add_remove_contacts(context):
-    context.db.users = [
-        User(113947584, NAV_STATE)
-    ]
-    json = '{"update_id": 767558050, "message": {"message_id": 22, "from": {"id": 1087968824, "is_bot": true, "first_name": "Group", "username": "GroupAnonymousBot"}, "sender_chat": {"id": -1001627609834, "title": "shad15_bot_test_chat", "type": "supergroup"}, "chat": {"id": -1001627609834, "title": "shad15_bot_test_chat", "type": "supergroup"}, "date": 1657879275, "text": "Контакты #contacts"}}'
-    await process_update(context, json)
-    assert context.db.posts == [Post(type='contacts', message_id=22, event_tag=None, event_date=None)]
-
-    json = '{"update_id": 767558051, "edited_message": {"message_id": 22, "from": {"id": 1087968824, "is_bot": true, "first_name": "Group", "username": "GroupAnonymousBot"}, "sender_chat": {"id": -1001627609834, "title": "shad15_bot_test_chat", "type": "supergroup"}, "chat": {"id": -1001627609834, "title": "shad15_bot_test_chat", "type": "supergroup"}, "date": 1657879275, "edit_date": 1657879298, "text": "Контакты кураторов"}}'
+    json = '{"update_id": 767558051, "edited_message": {"message_id": 22, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "sender_chat": {"id": -1001627609834, "title": "shad15_bot_test_chat", "type": "supergroup"}, "chat": {"id": -1001627609834, "title": "shad15_bot_test_chat", "type": "supergroup"}, "date": 1657879275, "edit_date": 1657879298, "text": "Событие"}}'
     await process_update(context, json)
     assert context.db.posts == []
-
-    json = '{"update_id": 767558049, "message": {"message_id": 303, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "chat": {"id": 113947584, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "type": "private"}, "date": 1657879247, "text": "Контакты кураторов"}}'
-    await process_update(context, json)
-    assert context.bot.trace == [['sendMessage', '{"chat_id": 113947584, "text": "Странно, инфы нет в базе."}']]
-
-
-async def test_bot_nav_other(context):
-    context.db.users = [
-        User(113947584, NAV_STATE)
-    ]
-    json = '{"update_id": 767558049, "message": {"message_id": 303, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "chat": {"id": 113947584, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "type": "private"}, "date": 1657879247, "text": "Что-то непонятное"}}'
-    await process_update(context, json)
-    assert context.bot.trace_methods() == ['sendMessage']
-    
+    assert match_trace(context.bot.trace, [
+        ['sendMessage', '{"chat_id": 113947584, "text": "Добавил'],
+        ['sendMessage', '{"chat_id": 113947584, "text": "Удалил']
+    ])
