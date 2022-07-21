@@ -437,12 +437,12 @@ NO_FUTURE_EVENTS_TEXT = (
 
 MISSING_POSTS_TEXT = 'Не нашел постов с тегом #{type}.'
 MISSING_FORWARD_TEXT = (
-    'Хотел переслать <a href="{url}">пост, но он исчез. '
+    'Хотел переслать пост {url}, но он исчез. '
     'Удалил из своей базы.'
 )
 
-NOTIFY_NEW_POST = 'Добавил <a href="{url}">пост</a> в базу, тег #{type}'
-NOTIFY_DELETE_POST = 'Удалил <a href="{url}">пост</a> из базы, тег #{type}'
+NOTIFY_NEW_POST = 'Добавил пост {url} базу, тег #{type}'
+NOTIFY_DELETE_POST = 'Удалил пост {url} из базы, тег #{type}'
 
 
 ######
