@@ -240,6 +240,7 @@ def dynamo_parse_post(item):
     message_id = int(item['message_id']['N'])
     type = item['type']['S']
 
+    event_date = None
     if 'event_date' in item:
         event_date = Date.fromisoformat(item['event_date']['S'])
 
