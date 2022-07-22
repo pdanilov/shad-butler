@@ -198,6 +198,17 @@ curl --url https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url={WEBHOOK_URL}
 export $(cat .env | xargs)
 ```
 
+Установить зависимости для тестов.
+
+```bash
+pip install \
+  pytest-aiohttp \
+  pytest-asyncio \
+  pytest-cov \
+  pytest-flakes \
+  pytest-pycodestyle
+```
+
 Прогнать линтер. Потестить базу, бота.
 
 ```bash
