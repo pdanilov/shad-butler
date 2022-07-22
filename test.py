@@ -223,7 +223,7 @@ async def test_bot_start_wip(context):
 async def test_bot_start_not_chat_member(context):
     await process_update(context, START_JSON)
     assert match_trace(context.bot.trace, [
-        ['getChatMember', '{"chat_id": -1001627609834, "user_id": 113947584}'],
+        ['getChatMember', '{"chat_id":'],
         ['sendMessage', '{"chat_id": 113947584, "text": "Не нашел тебя в чате выпускников']
     ])
 
@@ -232,17 +232,17 @@ async def test_bot_start_check_chat_member(context):
     context.bot.chat_members = [113947584]
     await process_update(context, START_JSON)
     assert match_trace(context.bot.trace, [
-        ['getChatMember', '{"chat_id": -1001627609834, "user_id": 113947584}'],
+        ['getChatMember', '{"chat_id":'],
         ['sendMessage', '{"chat_id": 113947584, "text": "Что может делать этот бот'],
         ['setMyCommands', '{"commands": "[{\\"command\\": \\"future']
     ])
-    assert context.db.users == [User(id=113947584, is_chat_member=True)]
 
 
 async def test_bot_start_is_chat_member(context):
-    context.db.users = [User(id=113947584, is_chat_member=True)]
+    context.bot.chat_members = [113947584]
     await process_update(context, START_JSON)
     assert match_trace(context.bot.trace, [
+        ['getChatMember', '{"chat_id":'],
         ['sendMessage', '{"chat_id": 113947584, "text": "Что может делать этот бот'],
         ['setMyCommands', '{"commands": ']
     ])
@@ -254,9 +254,10 @@ async def test_bot_start_is_chat_member(context):
 
 
 async def test_bot_other(context):
-    context.db.users = [User(id=113947584, is_chat_member=True)]
+    context.bot.chat_members = [113947584]
     await process_update(context, START_JSON.replace('/start', 'hiii'))
     assert match_trace(context.bot.trace, [
+        ['getChatMember', '{"chat_id":'],
         ['sendMessage', '{"chat_id": 113947584, "text": "Что может делать этот бот'],
     ])
 
@@ -270,27 +271,29 @@ EVENTS_JSON = START_JSON.replace('/start', '/future_events')
 
 
 async def test_bot_events_missing(context):
-    context.db.users = [User(id=113947584, is_chat_member=True)]
+    context.bot.chat_members = [113947584]
     await process_update(context, EVENTS_JSON)
-    assert context.bot.trace == [
-        ['sendMessage', '{"chat_id": 113947584, "text": "Не нашел постов с тегом #event."}']
-    ]
+    assert match_trace(context.bot.trace, [
+        ['getChatMember', '{"chat_id":'],
+        ['sendMessage', '"text": "Не нашел постов с тегом #event."}']
+    ])
 
 
 async def test_bot_events_no(context):
-    context.db.users = [User(id=113947584, is_chat_member=True)]
+    context.bot.chat_members = [113947584]
     context.db.posts = [
         Post(type='event', message_id=22, event_date=datetime.date(2020, 8, 1))
     ]
     context.bot.chat_messages = [22]
     await process_update(context, EVENTS_JSON)
     assert match_trace(context.bot.trace,[
+        ['getChatMember', '{"chat_id"'],
         ['sendMessage', '{"chat_id": 113947584, "text": "В ближайшее время нет эвентов']
     ])
 
 
 async def test_bot_events_select(context):
-    context.db.users = [User(id=113947584, is_chat_member=True)]
+    context.bot.chat_members = [113947584]
     context.bot.chat_messages = [22, 23, 24]
     context.db.posts = [
         Post(type='event', message_id=22, event_date=datetime.date(2020, 8, 1)),
@@ -299,6 +302,7 @@ async def test_bot_events_select(context):
     ]
     await process_update(context, EVENTS_JSON)
     assert match_trace(context.bot.trace, [
+        ['getChatMember', '{"chat_id":'],
         ['forwardMessage', '"message_id": 23}'],
         ['forwardMessage', '"message_id": 24}'],
     ])
@@ -313,21 +317,23 @@ NAV_JSON = START_JSON.replace('/start', '/chats')
 
 
 async def test_bot_nav_missing(context):
-    context.db.users = [User(id=113947584, is_chat_member=True)]
+    context.bot.chat_members = [113947584]
     await process_update(context, NAV_JSON)
-    assert context.bot.trace == [
-        ['sendMessage', '{"chat_id": 113947584, "text": "Не нашел постов с тегом #chats."}']
-    ]
+    assert match_trace(context.bot.trace, [
+        ['getChatMember', '{"chat_id":'],
+        ['sendMessage', '"text": "Не нашел постов с тегом #chats."}']
+    ])
 
 
 async def test_bot_nav_ok(context):
-    context.db.users = [User(id=113947584, is_chat_member=True)]
+    context.bot.chat_members = [113947584]
     context.bot.chat_messages = [22]
     context.db.posts = [
         Post(type='chats', message_id=22),
     ]
     await process_update(context, NAV_JSON)
     assert match_trace(context.bot.trace, [
+        ['getChatMember', '{"chat_id":'],
         ['forwardMessage', '"message_id": 22}'],
     ])
 
@@ -339,7 +345,6 @@ async def test_bot_nav_ok(context):
 
 
 async def test_bot_chat_add_remove_footer(context):
-    context.db.users = [User(id=113947584, is_chat_member=True)]
     json = '{"update_id": 767558050, "message": {"message_id": 22, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "sender_chat": {"id": -1001627609834, "title": "shad15_bot_test_chat", "type": "supergroup"}, "chat": {"id": -1001627609834, "title": "shad15_bot_test_chat", "type": "supergroup"}, "date": 1657879275, "text": "Событие #event 2030-08-01"}}'
     await process_update(context, json)
     assert context.db.posts == [

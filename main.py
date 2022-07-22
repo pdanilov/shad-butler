@@ -708,7 +708,7 @@ class UserNotFound(BadRequest):
     match = 'user not found'
 
 
-async def check_chat_member(bot, chat_id, user_id):
+async def is_chat_member(bot, chat_id, user_id):
     try:
         member = await bot.get_chat_member(
             chat_id=chat_id,
@@ -736,18 +736,11 @@ class ChatMemberMiddleware(BaseMiddleware):
             return
 
         if message.chat.type == ChatType.PRIVATE:
-            id = message.from_user.id
-            user = await self.context.db.get_user(id)
-            if not user:
-                is_chat_member = await check_chat_member(
-                    self.context.bot,
-                    chat_id=CHAT_ID,
-                    user_id=id
-                )
-                user = User(id, is_chat_member)
-                await self.context.db.put_user(user)
-
-            if user.is_chat_member:
+            if await is_chat_member(
+                self.context.bot,
+                chat_id=CHAT_ID,
+                user_id=message.from_user.id
+            ):
                 return
 
         await message.answer(text=NOT_CHAT_MEMBER_TEXT)
