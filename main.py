@@ -298,32 +298,6 @@ DB.put_post = put_post
 DB.delete_post = delete_post
 
 
-# YC Serverless Container allows up to 16 concurrent connections,
-# before launching another instance. Telegram sends up to 16
-# concurrent requests to webhook. So there should always be only one
-# instace if CachedDB.
-
-
-class CachedDB(DB):
-    def __init__(self):
-        DB.__init__(self)
-
-        self.posts = None
-
-    async def read_posts(self):
-        if self.posts is None:
-            self.posts = await DB.read_posts(self)
-        return self.posts
-
-    async def put_post(self, post):
-        await DB.put_post(self, post)
-        self.posts = None
-
-    async def delete_post(self, message_id):
-        await DB.delete_post(self, message_id)
-        self.posts = None
-
-
 #######
 #
 #   HANDLERS
@@ -749,7 +723,7 @@ class BotContext:
     def __init__(self):
         self.bot = Bot(token=BOT_TOKEN)
         self.dispatcher = Dispatcher(self.bot)
-        self.db = CachedDB()
+        self.db = DB()
 
 
 BotContext.handle_start_command = handle_start_command

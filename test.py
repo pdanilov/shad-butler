@@ -20,7 +20,6 @@ from main import (
     ChatMemberStatus,
 
     DB,
-    CachedDB,
     BotContext,
 
     Date,
@@ -49,7 +48,7 @@ def event_loop():
 
 @pytest.fixture(scope='session')
 async def db():
-    db = CachedDB()
+    db = DB()
     await db.connect()
     yield db
     await db.close()
