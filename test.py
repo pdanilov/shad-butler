@@ -198,7 +198,7 @@ async def test_bot_start_check_chat_member(context):
     await process_update(context, START_JSON)
     assert match_trace(context.bot.trace, [
         ['getChatMember', '{"chat_id":'],
-        ['sendMessage', '{"chat_id": 113947584, "text": "Что может делать этот бот'],
+        ['sendMessage', '{"chat_id": 113947584, "text": "Привет'],
         ['setMyCommands', '{"commands": "[{\\"command\\": \\"future']
     ])
 
@@ -208,7 +208,7 @@ async def test_bot_start_is_chat_member(context):
     await process_update(context, START_JSON)
     assert match_trace(context.bot.trace, [
         ['getChatMember', '{"chat_id":'],
-        ['sendMessage', '{"chat_id": 113947584, "text": "Что может делать этот бот'],
+        ['sendMessage', '{"chat_id": 113947584, "text": "Привет'],
         ['setMyCommands', '{"commands": ']
     ])
 
@@ -223,7 +223,7 @@ async def test_bot_other(context):
     await process_update(context, START_JSON.replace('/start', 'hiii'))
     assert match_trace(context.bot.trace, [
         ['getChatMember', '{"chat_id":'],
-        ['sendMessage', '{"chat_id": 113947584, "text": "Что может делать этот бот'],
+        ['sendMessage', '{"chat_id": 113947584, "text": "Привет'],
     ])
 
 
@@ -310,12 +310,12 @@ async def test_bot_nav_ok(context):
 
 
 async def test_bot_chat_add_remove_footer(context):
-    json = '{"update_id": 767558050, "message": {"message_id": 22, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "sender_chat": {"id": -1001627609834, "title": "shad15_bot_test_chat", "type": "supergroup"}, "chat": {"id": -1001627609834, "title": "shad15_bot_test_chat", "type": "supergroup"}, "date": 1657879275, "text": "Событие #event 2030-08-01"}}'
+    json = '{"update_id": 767558050, "message": {"message_id": 22, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "sender_chat": {"id": -1001432443813, "title": "shad15_bot_test_chat", "type": "supergroup"}, "chat": {"id": -1001432443813, "title": "shad15_bot_test_chat", "type": "supergroup"}, "date": 1657879275, "text": "Событие #event 2030-08-01"}}'
     await process_update(context, json)
     assert context.db.posts == [
         Post(message_id=22, type='event', event_date=datetime.date(2030, 8, 1))
     ]
 
-    json = '{"update_id": 767558051, "edited_message": {"message_id": 22, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "sender_chat": {"id": -1001627609834, "title": "shad15_bot_test_chat", "type": "supergroup"}, "chat": {"id": -1001627609834, "title": "shad15_bot_test_chat", "type": "supergroup"}, "date": 1657879275, "edit_date": 1657879298, "text": "Событие"}}'
+    json = '{"update_id": 767558051, "edited_message": {"message_id": 22, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "sender_chat": {"id": -1001432443813, "title": "shad15_bot_test_chat", "type": "supergroup"}, "chat": {"id": -1001432443813, "title": "shad15_bot_test_chat", "type": "supergroup"}, "date": 1657879275, "edit_date": 1657879298, "text": "Событие"}}'
     await process_update(context, json)
     assert context.db.posts == []
