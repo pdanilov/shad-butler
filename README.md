@@ -187,7 +187,7 @@ yc log read default --follow --folder-name shad-botik
 
 ```bash
 WEBHOOK_URL=https://${CONTAINER_ID}.containers.yandexcloud.net/
-curl --url https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url={WEBHOOK_URL}
+curl --url https://api.telegram.org/bot${BOT_TOKEN}/setWebhook\?url=${WEBHOOK_URL}
 ```
 
 Узнать `chat_id` чатик выпускников. Скопировать ссылку на любое сообщение `https://t.me/c/123123123/5329`. Добавить в начало -100 `chat_id=-100123123123`. Записать `CHAT_ID` в `.env`.
