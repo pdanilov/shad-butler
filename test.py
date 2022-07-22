@@ -117,7 +117,7 @@ class FakeBot(Bot):
 
 
 # Mock db, just put/delete items in array. Test actual Dynamo in
-# separate db tests.
+# test_db_* tests.
 
 
 class FakeDB(DB):

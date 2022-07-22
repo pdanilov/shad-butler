@@ -373,17 +373,17 @@ async def handle_other(context, message):
 
 
 def message_url(chat_id, message_id):
-    # https://github.com/aiogram/aiogram/blob/master/aiogram/types/chat.py#L79
-    chat_id = -1_000_000_000_000 - chat_id
-
     # -1001627609834, 21 -> https://t.me/c/1627609834/21
+    # https://github.com/aiogram/aiogram/blob/master/aiogram/types/chat.py#L79
+
+    chat_id = -1_000_000_000_000 - chat_id
     return f'https://t.me/c/{chat_id}/{message_id}'
 
 
 async def forward_post(context, message, post):
     # Telegram Bot API missing delete event
     # https://github.com/tdlib/telegram-bot-api/issues/286#issuecomment-1154020149
-    # Remove after forward fails
+    # Remove after forward fails. Rare in practice
 
     try:
         await context.bot.forward_message(
