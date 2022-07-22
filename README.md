@@ -68,7 +68,7 @@ aws configure --profile shad-botik
 ru-central1
 ```
 
-Создать таблички.
+Создать табличку.
 
 ```bash
 aws dynamodb create-table \
@@ -81,27 +81,14 @@ aws dynamodb create-table \
     AttributeName=message_id,KeyType=HASH \
   --endpoint $DYNAMO_ENDPOINT \
   --profile shad-botik
-
-aws dynamodb create-table \
-  --table-name users \
-  --attribute-definitions \
-    AttributeName=id,AttributeType=N \
-    AttributeName=state,AttributeType=S \
-  --key-schema \
-    AttributeName=id,KeyType=HASH \
-  --endpoint $DYNAMO_ENDPOINT \
-  --profile shad-botik
 ```
 
 Удалить таблички.
 
 ```bash
-for table in posts users
-do
-  aws dynamodb delete-table --table-name $table \
-    --endpoint $DYNAMO_ENDPOINT \
-    --profile shad-botik
-done
+aws dynamodb delete-table --table-name posts \
+  --endpoint $DYNAMO_ENDPOINT \
+  --profile shad-botik
 ```
 
 Список таблиц.
@@ -112,12 +99,12 @@ aws dynamodb list-tables \
   --profile shad-botik
 ```
 
-Заполнить табличку с постами.
+Заполнить табличку постами.
 
 ```bash
-items=('{"message_id": {"N": "5"}, "date": {"S": "2022-07-09"}}' \
-'{"message_id": {"N": "6"}, "date": {"S": "2022-07-13"}}' \
-'{"message_id": {"N": "7"}, "date": {"S": "2022-07-25"}}')
+items=('{"message_id": {"N": "5"}, "event_date": {"S": "2022-07-09"}}' \
+'{"message_id": {"N": "6"}, "event_date": {"S": "2022-07-13"}}' \
+'{"message_id": {"N": "7"}, "event_date": {"S": "2022-07-25"}}')
 
 for item in $items
 do
@@ -129,16 +116,11 @@ do
 done
 ```
 
-Прочитать таблички.
+Прочитать табличку.
 
 ```bash
 aws dynamodb scan \
   --table-name posts \
-  --endpoint $DYNAMO_ENDPOINT \
-  --profile shad-botik
-
-aws dynamodb scan \
-  --table-name users \
   --endpoint $DYNAMO_ENDPOINT \
   --profile shad-botik
 ```

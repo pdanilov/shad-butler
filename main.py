@@ -16,7 +16,6 @@ from aiogram import (
 )
 from aiogram.types import (
     ChatType,
-    ContentType,
     ChatMemberStatus,
     BotCommand,
 )
@@ -141,17 +140,6 @@ def parse_post_footer(text):
         return PostFooter(type)
 
 
-#####
-#  USER
-#####
-
-
-@dataclass
-class User:
-    id: int
-    is_chat_member: bool
-
-
 ######
 #
 #  DYNAMO
@@ -191,7 +179,6 @@ async def dynamo_client():
 
 S = 'S'
 N = 'N'
-BOOL = 'BOOL'
 
 
 async def dynamo_scan(client, table):
@@ -263,33 +250,13 @@ def dynamo_format_post(post):
     return item
 
 
-def dynamo_parse_user(item):
-    id = int(item['id']['N'])
-    is_chat_member = item['is_chat_member']['BOOL']
-    return User(id, is_chat_member)
-
-
-def dynamo_format_user(user):
-    return {
-        'id': {
-            'N': str(user.id)
-        },
-        'is_chat_member': {
-            'BOOL': user.is_chat_member
-        }
-    }
-
-
 ######
 #   READ/WRITE
 ######
 
 
 POSTS_TABLE = 'posts'
-USERS_TABLE = 'users'
-
 MESSAGE_ID_KEY = 'message_id'
-ID_KEY = 'id'
 
 
 async def read_posts(db):
@@ -306,27 +273,6 @@ async def delete_post(db, message_id):
     await dynamo_delete(
         db.client, POSTS_TABLE,
         MESSAGE_ID_KEY, N, message_id
-    )
-
-
-async def get_user(db, id):
-    item = await dynamo_get(
-        db.client, USERS_TABLE,
-        ID_KEY, N, id
-    )
-    if item:
-        return dynamo_parse_user(item)
-
-
-async def put_user(db, user):
-    item = dynamo_format_user(user)
-    await dynamo_put(db.client, USERS_TABLE, item)
-
-
-async def delete_user(db, id):
-    await dynamo_delete(
-        db.client, USERS_TABLE,
-        ID_KEY, N, id
     )
 
 
@@ -351,10 +297,6 @@ DB.read_posts = read_posts
 DB.put_post = put_post
 DB.delete_post = delete_post
 
-DB.get_user = get_user
-DB.put_user = put_user
-DB.delete_user = delete_user
-
 
 # YC Serverless Container allows up to 16 concurrent connections,
 # before launching another instance. Telegram sends up to 16
@@ -367,7 +309,6 @@ class CachedDB(DB):
         DB.__init__(self)
 
         self.posts = None
-        self.id_users = {}
 
     async def read_posts(self):
         if self.posts is None:
@@ -381,19 +322,6 @@ class CachedDB(DB):
     async def delete_post(self, message_id):
         await DB.delete_post(self, message_id)
         self.posts = None
-
-    async def get_user(self, id):
-        if id not in self.id_users:
-            self.id_users[id] = await DB.get_user(self, id)
-        return self.id_users[id]
-
-    async def put_user(self, user):
-        await DB.put_user(self, user)
-        self.id_users.pop(user.id, None)
-
-    async def delete_user(self, id):
-        await DB.delete_user(self, id)
-        self.id_users.pop(id, None)
 
 
 #######
@@ -600,18 +528,6 @@ async def handle_chat_edited_message(context, message):
         await context.db.delete_post(post.message_id)
 
 
-async def handle_chat_new_member(context, message):
-    for member in message.new_chat_members:
-        user = User(member.id, is_chat_member=True)
-        context.db.put_user(user)
-
-
-async def handle_chat_left_member(context, message):
-    member = message.left_chat_member
-    user = User(member.id, is_chat_member=False)
-    context.db.put_user(user)
-
-
 #####
 #  SETUP
 #####
@@ -662,16 +578,6 @@ def setup_handlers(context):
     context.dispatcher.register_edited_message_handler(
         context.handle_chat_edited_message,
         chat_id=CHAT_ID,
-    )
-    context.dispatcher.register_message_handler(
-        context.handle_chat_new_member,
-        chat_id=CHAT_ID,
-        content_types=ContentType.NEW_CHAT_MEMBERS
-    )
-    context.dispatcher.register_message_handler(
-        context.handle_chat_left_member,
-        chat_id=CHAT_ID,
-        content_types=ContentType.LEFT_CHAT_MEMBER
     )
 
 
@@ -857,8 +763,6 @@ BotContext.handle_other = handle_other
 
 BotContext.handle_chat_new_message = handle_chat_new_message
 BotContext.handle_chat_edited_message = handle_chat_edited_message
-BotContext.handle_chat_new_member = handle_chat_new_member
-BotContext.handle_chat_left_member = handle_chat_left_member
 
 BotContext.setup_handlers = setup_handlers
 BotContext.setup_middlewares = setup_middlewares

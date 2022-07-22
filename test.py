@@ -27,8 +27,6 @@ from main import (
 
     Post,
     find_post,
-
-    User,
 )
 
 
@@ -74,16 +72,6 @@ async def test_db_posts(db):
     await db.delete_post(post.message_id)
     posts = await db.read_posts()
     assert not find_post(posts, message_id=post.message_id)
-
-
-async def test_db_users(db):
-    user = User(
-        id=1,
-        is_chat_member=False
-    )
-    await db.put_user(user)
-    assert user == await db.get_user(user.id)
-    await db.delete_user(user.id)
 
 
 #####
@@ -137,7 +125,6 @@ class FakeDB(DB):
     def __init__(self):
         DB.__init__(self)
         self.posts = []
-        self.users = []
 
     async def read_posts(self):
         return self.posts
@@ -149,20 +136,6 @@ class FakeDB(DB):
         self.posts = [
             _ for _ in self.posts
             if _.message_id != message_id
-        ]
-
-    async def get_user(self, id):
-        for user in self.users:
-            if user.id == id:
-                return user
-
-    async def put_user(self, user):
-        self.users.append(user)
-
-    async def delete_user(self, id):
-        self.users = [
-            _ for _ in self.users
-            if _.id != id
         ]
 
 
