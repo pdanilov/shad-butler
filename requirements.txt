@@ -1,2 +1,0 @@
-aiogram==2.21
-aiobotocore==2.3.4
