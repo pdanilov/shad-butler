@@ -349,7 +349,3 @@ async def test_bot_chat_add_remove_footer(context):
     json = '{"update_id": 767558051, "edited_message": {"message_id": 22, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "sender_chat": {"id": -1001627609834, "title": "shad15_bot_test_chat", "type": "supergroup"}, "chat": {"id": -1001627609834, "title": "shad15_bot_test_chat", "type": "supergroup"}, "date": 1657879275, "edit_date": 1657879298, "text": "Событие"}}'
     await process_update(context, json)
     assert context.db.posts == []
-    assert match_trace(context.bot.trace, [
-        ['sendMessage', '{"chat_id": 113947584, "text": "Добавил'],
-        ['sendMessage', '{"chat_id": 113947584, "text": "Удалил']
-    ])

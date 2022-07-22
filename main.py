@@ -442,9 +442,6 @@ MISSING_FORWARD_TEXT = (
     'Удалил из своей базы.'
 )
 
-NOTIFY_NEW_POST = 'Добавил пост {url} базу, тег #{type}'
-NOTIFY_DELETE_POST = 'Удалил пост {url} из базы, тег #{type}'
-
 
 ######
 #  START
@@ -574,64 +571,32 @@ async def handle_events_arhive_command(context, message):
 #####
 
 
-async def handle_new_post(context, message, footer):
+async def new_post(context, message, footer):
     post = Post(
         message.message_id, footer.type,
         footer.event_date
     )
     await context.db.put_post(post)
-    await notify_post(
-        context, message,
-        footer.type, NOTIFY_NEW_POST
-    )
-
-
-async def handle_delete_post(context, message, post):
-    await context.db.delete_post(post.message_id)
-    await notify_post(
-        context, message,
-        post.type, NOTIFY_DELETE_POST
-    )
-
-
-async def notify_post(context, message, type, pattern):
-    url = message_url(
-        chat_id=message.chat.id,
-        message_id=message.message_id
-    )
-    text = pattern.format(
-        url=url,
-        type=type
-    )
-    try:
-        await context.bot.send_message(
-            chat_id=message.from_user.id,
-            text=text
-        )
-    except BadRequest:
-        # Post author does not use bot for example, or blocked it, or whatever
-        # https://github.com/aiogram/aiogram/blob/master/examples/broadcast_example.py#L25
-        pass
 
 
 async def handle_chat_new_message(context, message):
     footer = parse_post_footer(message.text)
     if footer:
-        await handle_new_post(context, message, footer)
+        await new_post(context, message, footer)
 
 
 async def handle_chat_edited_message(context, message):
     footer = parse_post_footer(message.text)
     if footer:
         # Added footer to existing message
-        await handle_new_post(context, message, footer)
+        await new_post(context, message, footer)
         return
 
     posts = await context.db.read_posts()
     post = find_post(posts, message_id=message.message_id)
     if post:
         # Removed footer from post
-        await handle_delete_post(context, message, post)
+        await context.db.delete_post(post.message_id)
 
 
 async def handle_chat_new_member(context, message):
