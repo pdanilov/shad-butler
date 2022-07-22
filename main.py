@@ -411,25 +411,26 @@ CONTACTS_COMMAND = CONTACTS
 WHOIS_HOWTO_COMMAND = WHOIS_HOWTO
 
 BOT_COMMANDS = [
-    BotCommand(FUTURE_EVENTS_COMMAND, 'ближайшие эвентах'),
-    BotCommand(EVENTS_ARCHIVE_COMMAND, 'записи прошедших эвентов'),
+    BotCommand(FUTURE_EVENTS_COMMAND, 'ближайшие эвенты'),
+    BotCommand(EVENTS_ARCHIVE_COMMAND, 'архив эвентов'),
     BotCommand(CHATS, 'тематические чаты'),
     BotCommand(CONTACTS_COMMAND, 'контакты кураторов'),
-    BotCommand(WHOIS_HOWTO_COMMAND, 'зачем и как писать #whois'),
+    BotCommand(WHOIS_HOWTO_COMMAND, 'мануал по #whois'),
+    BotCommand(START_COMMAND, 'интро'),
 ]
 
 START_TEXT = f'''Что может делать этот бот?
-Добавлять выпускников ШАД в закрытое комьюнити в телеграм. \
+- Добавлять выпускников ШАД в закрытое комьюнити в телеграм. \
 Для этого нужно только выпуститься из ШАДа :)
-Рассказывать о предстоящих эвентах для выпускников ШАД.
-Помогать ориентироваться, если хочешь помочь ШАДу.
+- Рассказывать о предстоящих эвентах для выпускников ШАД
+- Помогать ориентироваться, если хочешь помочь ШАДу
 
 Команды
-/{FUTURE_EVENTS_COMMAND} - ближайшие эвенты;
-/{WHOIS_HOWTO_COMMAND} - зачем и как писать #whois;
-/{EVENTS_ARCHIVE_COMMAND} - записи прошедших эвентов;
-/{CHATS_COMMAND} - тематические чаты;
-/{CONTACTS_COMMAND} - контакты кураторов.'''
+/{FUTURE_EVENTS_COMMAND} - ближайшие эвенты
+/{EVENTS_ARCHIVE_COMMAND} - архив эвентов
+/{CHATS_COMMAND} - тематические чаты
+/{CONTACTS_COMMAND} - контакты кураторов
+/{WHOIS_HOWTO_COMMAND} - мануал по #whois'''
 
 NO_FUTURE_EVENTS_TEXT = (
     'В ближайшее время нет эвентов. '
