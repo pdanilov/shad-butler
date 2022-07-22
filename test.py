@@ -185,13 +185,6 @@ def match_trace(trace, etalon):
 START_JSON = '{"update_id": 767558049, "message": {"message_id": 303, "from": {"id": 113947584, "is_bot": false, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "language_code": "ru"}, "chat": {"id": 113947584, "first_name": "Alexander", "last_name": "Kukushkin", "username": "alexkuk", "type": "private"}, "date": 1657879247, "text": "/start", "entities": [{"type": "bot_command", "offset": 0, "length": 6}]}}'
 
 
-async def test_bot_start_wip(context):
-    await process_update(context, START_JSON.replace('alexkuk', 'abc'))
-    assert match_trace(context.bot.trace, [
-        ['sendMessage', '{"chat_id": 113947584, "text": "Бот пока отвечает только разработ']
-    ])
-
-
 async def test_bot_start_not_chat_member(context):
     await process_update(context, START_JSON)
     assert match_trace(context.bot.trace, [

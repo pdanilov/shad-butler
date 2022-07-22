@@ -635,34 +635,6 @@ class ChatMemberMiddleware(BaseMiddleware):
 
 
 #######
-#   WIP
-######
-
-
-WIP_TEXT = 'Бот пока отвечает только разработчикам.'
-WIP_USERNAMES = [
-    'alexkuk',
-    'shuternay',
-    'tinicheva',
-    'farshov',
-]
-
-
-class WIPMiddleware(BaseMiddleware):
-    def __init__(self, context):
-        self.context = context
-        BaseMiddleware.__init__(self)
-
-    async def on_pre_process_message(self, message, data):
-        if (
-                message.chat.type == ChatType.PRIVATE
-                and message.from_user.username not in WIP_USERNAMES
-        ):
-            await message.answer(text=WIP_TEXT)
-            raise CancelHandler
-
-
-#######
 #   SETUP
 #########
 
@@ -670,7 +642,6 @@ class WIPMiddleware(BaseMiddleware):
 def setup_middlewares(context):
     middlewares = [
         LoggingMiddleware(),
-        WIPMiddleware(context),
         ChatMemberMiddleware(context),
     ]
     for middleware in middlewares:
