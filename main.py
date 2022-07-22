@@ -56,8 +56,10 @@ CHAT_ID = int(getenv('CHAT_ID'))
 #######
 
 
+LOG_LEVEL = getenv('LOG_LEVEL', logging.INFO)
+
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
+log.setLevel(LOG_LEVEL)
 log.addHandler(logging.StreamHandler())
 
 
@@ -566,10 +568,15 @@ def setup_handlers(context):
 #  LOGGING
 ######
 
+# Do not log messages from superchat
+# Do not log usernames
+# YC Logging keeps only last 3 days of logs
+
 
 class LoggingMiddleware(BaseMiddleware):
-    async def on_pre_process_update(self, update, data):
-        log.debug(f'Update: {update}')
+    async def on_pre_process_message(self, message, data):
+        if message.chat.type == ChatType.PRIVATE:
+            log.info(f'From id: {message.from_id} text: {message.text!r}')
 
 
 #######
