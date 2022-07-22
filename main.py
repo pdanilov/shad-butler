@@ -619,9 +619,6 @@ class ChatMemberMiddleware(BaseMiddleware):
     # setup_handlers
 
     async def on_pre_process_message(self, message, data):
-        if message.chat.id == CHAT_ID:
-            return
-
         if message.chat.type == ChatType.PRIVATE:
             if await is_chat_member(
                 self.context.bot,
@@ -629,9 +626,15 @@ class ChatMemberMiddleware(BaseMiddleware):
                 user_id=message.from_user.id
             ):
                 return
+            else:
+                await message.answer(text=NOT_CHAT_MEMBER_TEXT)
+                raise CancelHandler
 
-        await message.answer(text=NOT_CHAT_MEMBER_TEXT)
-        raise CancelHandler
+        else:
+            if message.chat.id == CHAT_ID:
+                return
+            else:
+                raise CancelHandler
 
 
 #######
