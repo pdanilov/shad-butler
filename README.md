@@ -135,12 +135,6 @@ yc container registry create default --folder-name shad-alumni-bot
 id: {REGISTRY_ID}
 ```
 
-Удобно настроить локальный `docker`, чтобы пушить в реестр.
-
-```bash
-yc container registry configure-docker
-```
-
 Дать права сервисному аккаунту читать из реестра. Интеграция с YC Serverless Container.
 
 ```bash
