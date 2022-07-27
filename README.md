@@ -150,18 +150,6 @@ yc container registry add-access-binding default \
   --folder-name shad-alumni-bot
 ```
 
-Почистить репозиторий, всегда использую только `latest`.
-
-```bash
-yc container image list \
-  --repository-name ${REGISTRY_ID}/shad-alumni-bot \
-  --folder-name shad-alumni-bot \
-  --format json \
-| jq -r '.[] | .id' \
-| tail -n +2 \
-| xargs -n 1 yc container image delete --async --id 
-```
-
 Создать Serverless Container. Записать `id` в `.env`.
 
 ```bash
