@@ -79,6 +79,7 @@ CONTACTS = 'contacts'
 CHATS = 'chats'
 EVENT = 'event'
 EVENTS_ARCHIVE = 'events_archive'
+LECTURES_ARCHIVE = 'lectures_archive'
 WHOIS_HOWTO = 'whois_howto'
 
 
@@ -310,6 +311,7 @@ DB.delete_post = delete_post
 START_COMMAND = 'start'
 FUTURE_EVENTS_COMMAND = 'future_events'
 EVENTS_ARCHIVE_COMMAND = EVENTS_ARCHIVE
+LECTURES_ARCHIVE_COMMAND = LECTURES_ARCHIVE
 CHATS_COMMAND = CHATS
 CONTACTS_COMMAND = CONTACTS
 WHOIS_HOWTO_COMMAND = WHOIS_HOWTO
@@ -317,6 +319,7 @@ WHOIS_HOWTO_COMMAND = WHOIS_HOWTO
 BOT_COMMANDS = [
     BotCommand(FUTURE_EVENTS_COMMAND, 'ближайшие эвенты'),
     BotCommand(EVENTS_ARCHIVE_COMMAND, 'архив эвентов'),
+    BotCommand(LECTURES_ARCHIVE_COMMAND, 'архив лекций'),
     BotCommand(CHATS, 'тематические чаты'),
     BotCommand(CONTACTS_COMMAND, 'контакты кураторов'),
     BotCommand(WHOIS_HOWTO_COMMAND, 'мануал по #whois'),
@@ -335,6 +338,7 @@ START_TEXT = f'''Привет!
 Команды
 /{FUTURE_EVENTS_COMMAND} - ближайшие эвенты
 /{EVENTS_ARCHIVE_COMMAND} - архив эвентов
+/{LECTURES_ARCHIVE_COMMAND} - архив лекций
 /{CHATS_COMMAND} - тематические чаты
 /{CONTACTS_COMMAND} - контакты кураторов
 /{WHOIS_HOWTO_COMMAND} - мануал по #whois
@@ -472,8 +476,12 @@ async def handle_whois_howto_command(context, message):
     await handle_nav_command(context, message, WHOIS_HOWTO)
 
 
-async def handle_events_arhive_command(context, message):
+async def handle_events_archive_command(context, message):
     await handle_nav_command(context, message, EVENTS_ARCHIVE)
+
+
+async def handle_lectures_archive_command(context, message):
+    await handle_nav_command(context, message, LECTURES_ARCHIVE)
 
 
 ####
@@ -542,9 +550,14 @@ def setup_handlers(context):
         commands=WHOIS_HOWTO_COMMAND,
     )
     context.dispatcher.register_message_handler(
-        context.handle_events_arhive_command,
+        context.handle_events_archive_command,
         chat_type=ChatType.PRIVATE,
         commands=EVENTS_ARCHIVE_COMMAND,
+    )
+    context.dispatcher.register_message_handler(
+        context.handle_lectures_archive_command,
+        chat_type=ChatType.PRIVATE,
+        commands=LECTURES_ARCHIVE_COMMAND,
     )
 
     context.dispatcher.register_message_handler(
@@ -717,7 +730,8 @@ BotContext.handle_future_events_command = handle_future_events_command
 BotContext.handle_chats_command = handle_chats_command
 BotContext.handle_contacts_command = handle_contacts_command
 BotContext.handle_whois_howto_command = handle_whois_howto_command
-BotContext.handle_events_arhive_command = handle_events_arhive_command
+BotContext.handle_events_archive_command = handle_events_archive_command
+BotContext.handle_lectures_archive_command = handle_lectures_archive_command
 
 BotContext.handle_other = handle_other
 
