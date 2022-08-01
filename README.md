@@ -197,8 +197,8 @@ pip install \
 
 ```bash
 make test-lint
-make test-lint test-key KEY=db
-make test-lint test-key KEY=bot
+make test-key KEY=db
+make test-key KEY=bot
 ```
 
 Собрать образ, загрузить его в реестр, задер
