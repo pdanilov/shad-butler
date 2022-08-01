@@ -104,9 +104,8 @@ aws dynamodb list-tables \
 Заполнить табличку постами.
 
 ```bash
-items=('{"message_id": {"N": "5"}, "event_date": {"S": "2022-07-09"}}' \
-'{"message_id": {"N": "6"}, "event_date": {"S": "2022-07-13"}}' \
-'{"message_id": {"N": "7"}, "event_date": {"S": "2022-07-25"}}')
+items=('{"message_id": {"N": "5614"}, "type": {"S": "event"}, "event_date": {"S": "2022-07-09"}}' \
+'{"message_id": {"N": "5638"}, "type": {"S": "contacts"}}')
 
 for item in $items
 do
