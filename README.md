@@ -126,6 +126,16 @@ aws dynamodb scan \
   --profile shad-alumni-bot
 ```
 
+Удалить запись.
+
+```bash
+aws dynamodb delete-item \
+  --table-name posts \
+  --key '{"message_id": {"N": "6275"}}' \
+  --endpoint $DYNAMO_ENDPOINT \
+  --profile shad-alumni-bot
+```
+
 Создать реестр для контейнера в YC. Записать `id` в `.env`.
 
 ```bash
