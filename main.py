@@ -125,9 +125,12 @@ EVENT_POST_FOOTER_PATTERN = re.compile(rf'''
 (\d\d\d\d-\d\d-\d\d)
 ''', re.X)
 
-NAV_POST_FOOTER_PATTERN = re.compile(
-    rf'#({CHATS}|{CONTACTS}|{EVENTS_ARCHIVE}|{WHOIS_HOWTO})'
-)
+NAV_POST_FOOTER_PATTERN = re.compile(rf'''
+\#(
+{CHATS}|{CONTACTS}
+|{EVENTS_ARCHIVE}|{LECTURES_ARCHIVE}
+|{WHOIS_HOWTO}
+)''', re.X)
 
 
 def parse_post_footer(text):
