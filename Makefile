@@ -1,5 +1,5 @@
 
-IMAGE = shad-alumni-bot
+IMAGE = shad-butler
 REGISTRY = cr.yandex/$(REGISTRY_ID)
 REMOTE = $(REGISTRY)/$(IMAGE)
 
@@ -22,7 +22,7 @@ push:
 deploy:
 	yc serverless container revision deploy \
 		--container-name default \
-		--image $(REGISTRY)/shad-alumni-bot:latest \
+		--image $(REGISTRY)/shad-butler:latest \
 		--cores 1 \
 		--memory 256MB \
 		--concurrency 16 \
@@ -33,4 +33,4 @@ deploy:
 		--environment DYNAMO_ENDPOINT=$(DYNAMO_ENDPOINT) \
 	        --environment CHAT_ID=$(CHAT_ID) \
 		--service-account-id $(SERVICE_ACCOUNT_ID) \
-		--folder-name shad-alumni-bot
+		--folder-name shad-butler

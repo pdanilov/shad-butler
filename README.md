@@ -14,13 +14,13 @@
 Создать директорию в YC.
 
 ```bash
-yc resource-manager folder create --name shad-alumni-bot
+yc resource-manager folder create --name shad-butler
 ```
 
 Создать сервисный аккаунт в YC. Записать `id` в `.env`.
 
 ```bash
-yc iam service-accounts create shad-alumni-bot --folder-name shad-alumni-bot
+yc iam service-accounts create shad-butler --folder-name shad-butler
 
 id: {SERVICE_ACCOUNT_ID}
 ```
@@ -29,8 +29,8 @@ id: {SERVICE_ACCOUNT_ID}
 
 ```bash
 yc iam access-key create \
-  --service-account-name shad-alumni-bot \
-  --folder-name shad-alumni-bot
+  --service-account-name shad-butler \
+  --folder-name shad-butler
 
 key_id: {AWS_KEY_ID}
 secret: {AWS_KEY}
@@ -43,10 +43,10 @@ secret: {AWS_KEY}
 ```bash
 for role in ydb.viewer ydb.editor
 do
-  yc resource-manager folder add-access-binding shad-alumni-bot \
+  yc resource-manager folder add-access-binding shad-butler \
     --role $role \
-    --service-account-name shad-alumni-bot \
-    --folder-name shad-alumni-bot \
+    --service-account-name shad-butler \
+    --folder-name shad-butler \
     --async
 done
 ```
@@ -54,7 +54,7 @@ done
 Создать базу YDB. Записать эндпоинт для DynamoDB в `.env`.
 
 ```bash
-yc ydb database create default --serverless --folder-name shad-alumni-bot
+yc ydb database create default --serverless --folder-name shad-butler
 
 document_api_endpoint: {DYNAMO_ENDPOINT}
 ```
@@ -63,7 +63,7 @@ document_api_endpoint: {DYNAMO_ENDPOINT}
 
 ```bash
 pip install awscli
-aws configure --profile shad-alumni-bot
+aws configure --profile shad-butler
 
 {AWS_KEY_ID}
 {AWS_KEY}
@@ -82,7 +82,7 @@ aws dynamodb create-table \
   --key-schema \
     AttributeName=message_id,KeyType=HASH \
   --endpoint $DYNAMO_ENDPOINT \
-  --profile shad-alumni-bot
+  --profile shad-butler
 ```
 
 Удалить таблички.
@@ -90,7 +90,7 @@ aws dynamodb create-table \
 ```bash
 aws dynamodb delete-table --table-name posts \
   --endpoint $DYNAMO_ENDPOINT \
-  --profile shad-alumni-bot
+  --profile shad-butler
 ```
 
 Список таблиц.
@@ -98,7 +98,7 @@ aws dynamodb delete-table --table-name posts \
 ```bash
 aws dynamodb list-tables \
   --endpoint $DYNAMO_ENDPOINT \
-  --profile shad-alumni-bot
+  --profile shad-butler
 ```
 
 Заполнить табличку постами.
@@ -113,7 +113,7 @@ do
     --table-name posts \
     --item $item \
     --endpoint $DYNAMO_ENDPOINT \
-    --profile shad-alumni-bot
+    --profile shad-butler
 done
 ```
 
@@ -123,7 +123,7 @@ done
 aws dynamodb scan \
   --table-name posts \
   --endpoint $DYNAMO_ENDPOINT \
-  --profile shad-alumni-bot
+  --profile shad-butler
 ```
 
 Удалить запись.
@@ -133,13 +133,13 @@ aws dynamodb delete-item \
   --table-name posts \
   --key '{"message_id": {"N": "6275"}}' \
   --endpoint $DYNAMO_ENDPOINT \
-  --profile shad-alumni-bot
+  --profile shad-butler
 ```
 
 Создать реестр для контейнера в YC. Записать `id` в `.env`.
 
 ```bash
-yc container registry create default --folder-name shad-alumni-bot
+yc container registry create default --folder-name shad-butler
 
 id: {REGISTRY_ID}
 ```
@@ -149,14 +149,14 @@ id: {REGISTRY_ID}
 ```bash
 yc container registry add-access-binding default \
   --role container-registry.images.puller \
-  --service-account-name shad-alumni-bot \
-  --folder-name shad-alumni-bot
+  --service-account-name shad-butler \
+  --folder-name shad-butler
 ```
 
 Создать Serverless Container. Записать `id` в `.env`.
 
 ```bash
-yc serverless container create --name default --folder-name shad-alumni-bot
+yc serverless container create --name default --folder-name shad-butler
 
 id: {CONTAINER_ID}
 ```
@@ -165,13 +165,13 @@ id: {CONTAINER_ID}
 
 ```bash
 yc serverless container allow-unauthenticated-invoke default \
-  --folder-name shad-alumni-bot
+  --folder-name shad-butler
 ```
 
 Логи.
 
 ```bash
-yc log read default --follow --folder-name shad-alumni-bot
+yc log read default --follow --folder-name shad-butler
 ```
 
 Узнать телеграмный токен у @BotFather. Записать в `.env`.
