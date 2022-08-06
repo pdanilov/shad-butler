@@ -339,18 +339,18 @@ START_TEXT = f'''Привет!
 Если есть идеи как меня развивать, то пиши @tinicheva
 
 Команды
-/{FUTURE_EVENTS_COMMAND} - ближайшие эвенты
-/{EVENTS_ARCHIVE_COMMAND} - архив эвентов
-/{LECTURES_ARCHIVE_COMMAND} - архив лекций
-/{CHATS_COMMAND} - тематические чаты
-/{CONTACTS_COMMAND} - контакты кураторов
-/{WHOIS_HOWTO_COMMAND} - мануал по #whois
+/{FUTURE_EVENTS_COMMAND} — ближайшие эвенты
+/{EVENTS_ARCHIVE_COMMAND} — архив эвентов
+/{LECTURES_ARCHIVE_COMMAND} — архив лекций
+/{CHATS_COMMAND} — тематические чаты
+/{CONTACTS_COMMAND} — контакты кураторов
+/{WHOIS_HOWTO_COMMAND} — мануал по #whois
 
 Команды доступны снизу по кнопке "Меню"'''
 
 NO_FUTURE_EVENTS_TEXT = (
     'В ближайшее время нет эвентов. '
-    f'Список прошедших - /{EVENTS_ARCHIVE_COMMAND}'
+    f'Список прошедших — /{EVENTS_ARCHIVE_COMMAND}'
 )
 
 MISSING_POSTS_TEXT = 'Не нашел постов с тегом #{type}.'
