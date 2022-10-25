@@ -1,4 +1,3 @@
-
 # Бот-навигатор для чата выпускников ШАДа
 
 ## Инструкции
@@ -70,6 +69,8 @@ aws configure --profile shad-butler
 ru-central1
 ```
 
+#### Далее идет несколько примеров, как работать с таблицами. Выполнять их необязательно.
+
 Создать табличку.
 
 ```bash
@@ -136,12 +137,20 @@ aws dynamodb delete-item \
   --profile shad-butler
 ```
 
+#### Вернемся к обязательным пунктам.
+
 Создать реестр для контейнера в YC. Записать `id` в `.env`.
 
 ```bash
 yc container registry create default --folder-name shad-butler
 
 id: {REGISTRY_ID}
+```
+
+Сконфигурировать Docker для использования `docker-credential-yc`.
+
+```bash
+yc container registry configure-docker
 ```
 
 Дать права сервисному аккаунту читать из реестра. Интеграция с YC Serverless Container.
@@ -174,7 +183,7 @@ yc serverless container allow-unauthenticated-invoke default \
 yc log read default --follow --folder-name shad-butler
 ```
 
-Узнать телеграмный токен у @BotFather. Записать в `.env`.
+Узнать телеграм токен бота у @BotFather. Записать в `.env`. 
 
 Прицепить вебхук.
 
@@ -183,9 +192,9 @@ WEBHOOK_URL=https://${CONTAINER_ID}.containers.yandexcloud.net/
 curl --url https://api.telegram.org/bot${BOT_TOKEN}/setWebhook\?url=${WEBHOOK_URL}
 ```
 
-Узнать `chat_id` чатик выпускников. Скопировать ссылку на любое сообщение `https://t.me/c/123123123/5329`. Добавить в начало -100 `chat_id=-100123123123`. Записать `CHAT_ID` в `.env`.
+Узнать `chat_id` чата выпускников. Скопировать ссылку на любое сообщение `https://t.me/c/123123123/5329`. Добавить в начало -100 `chat_id=-100123123123`. Записать `CHAT_ID` в `.env`.
 
-Трюк чтобы загрузить окружение из `.env`.
+Трюк, чтобы загрузить окружение из `.env`.
 
 ```bash
 export $(cat .env | xargs)
@@ -210,7 +219,7 @@ make test-key KEY=db
 make test-key KEY=bot
 ```
 
-Собрать образ, загрузить его в реестр, задер
+Собрать образ, загрузить его в реестр, задеплоить.
 
 ```bash
 make image push deploy
